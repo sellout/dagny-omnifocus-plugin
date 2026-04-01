@@ -1,0 +1,17 @@
+/.cache/git/config linguist-generated
+/.cache/git/hooks/pre-push linguist-generated
+/.cache/vale/Vocab/dagny-omnifocus-plugin/accept.txt linguist-generated
+/.cache/vale/config/vocabularies/dagny-omnifocus-plugin/accept.txt linguist-generated
+/.dir-locals.el linguist-generated
+/.editorconfig linguist-generated
+/.envrc linguist-generated
+/.gitattributes linguist-generated
+/.github/renovate.json linguist-generated
+/.github/settings.yml linguist-generated
+/.github/workflows/flakehub-publish.yml linguist-generated
+/.github/workflows/flakestry-publish.yml linguist-generated
+/.github/workflows/switch-pm-generation.yml linguist-generated
+/.gitignore linguist-generated
+/.vale.ini linguist-generated
+/garnix.yaml linguist-generated
+/nix-ci.nix linguist-generated

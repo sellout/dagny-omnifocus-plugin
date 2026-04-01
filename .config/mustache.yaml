@@ -1,0 +1,10 @@
+{
+  "project":
+    {
+      "description": "Bidirectional syncing between Dagny and OmniFocus.",
+      "name": "dagny-omnifocus-plugin",
+      "repo": "sellout/dagny-omnifocus-plugin",
+      "summary": "Dagny / OmniFocus integration",
+    },
+  "type": { "name": "default" },
+}
