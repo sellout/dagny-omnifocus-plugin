@@ -51,90 +51,209 @@
                 // For folder/everything modes, track OF projects and their
                 // child Dagny task IDs so we can create project-level tasks
                 const ofProjectChildren = new Map(); // ofProjectName -> [dagnyTaskId]
+                const ofProjectSequential = new Map(); // ofProjectName -> boolean
 
+                // Map OF task primaryKey -> Dagny taskId for dependency
+                // resolution. Pre-populate from existing synced tasks.
+                const ofToDagnyId = new Map();
                 for (const ofTask of tasksToScan) {
-                    const marker = lib.getDagnyMarker(ofTask);
+                    const m = lib.getDagnyMarker(ofTask);
+                    if (m && lib.markerMatchesProject(m, mapping)) {
+                        ofToDagnyId.set(ofTask.id.primaryKey, m.taskId);
+                    }
+                }
 
-                    if (
-                        marker &&
-                        lib.markerMatchesProject(marker, mapping)
-                    ) {
-                        // Existing synced task: push updates
-                        const existingDagnyTask = dagnyIndex.get(marker.taskId);
-                        const patch = buildPatchFromOFTask(
-                            ofTask,
-                            existingDagnyTask,
-                            projStatusMap,
-                            lib,
-                            usernameToId,
-                            myUserId
-                        );
-                        if (patch) {
-                            await lib.updateTask(
-                                mapping.dagnyProjectId,
-                                marker.taskId,
-                                patch
+                // Process a list of sibling tasks. For each task:
+                //   - If it already has a marker, update it
+                //   - If it's new and has children (group), process children
+                //     first so the group can reference their Dagny IDs
+                //   - Compute dependencies based on sequential/parallel context
+                // predecessor: Dagny ID that should be inherited by
+                // children of groups at this level (propagated from
+                // an ancestor's sequential context). null if none.
+                async function processSiblings(siblings, isSequential, predecessor) {
+                    for (var i = 0; i < siblings.length; i++) {
+                        var ofTask = siblings[i];
+                        var marker = lib.getDagnyMarker(ofTask);
+
+                        // Compute the predecessor for this task's children:
+                        // In a sequential context, the predecessor for a
+                        // group's children is the previous sibling.
+                        // In a parallel context, all children inherit the
+                        // same predecessor passed from above.
+                        var childPredecessor = null;
+                        if (isSequential && i > 0) {
+                            childPredecessor = ofToDagnyId.get(
+                                siblings[i - 1].id.primaryKey
+                            ) || null;
+                        } else if (!isSequential) {
+                            childPredecessor = predecessor;
+                        }
+
+                        if (marker && lib.markerMatchesProject(marker, mapping)) {
+                            // Existing synced task: push updates
+                            var existingDagnyTask = dagnyIndex.get(marker.taskId);
+                            var patch = buildPatchFromOFTask(
+                                ofTask, existingDagnyTask, projStatusMap,
+                                lib, usernameToId, myUserId
                             );
-                            totalUpdated++;
+                            if (patch) {
+                                await lib.updateTask(
+                                    mapping.dagnyProjectId,
+                                    marker.taskId, patch
+                                );
+                                totalUpdated++;
+                            }
+                            // Recurse into children so new children get processed
+                            if (ofTask.hasChildren) {
+                                var groupPred = ofTask.sequential
+                                    ? childPredecessor  // first child gets it
+                                    : childPredecessor; // all children get it
+                                await processSiblings(
+                                    ofTask.children, ofTask.sequential, groupPred
+                                );
+                            }
+                            continue;
                         }
 
-                        // Track parent project for dependency edges
-                        if (
-                            (target.type === "folder" ||
-                                target.type === "everything") &&
-                            ofTask.containingProject
-                        ) {
-                            const projName = ofTask.containingProject.name;
-                            if (!ofProjectChildren.has(projName)) {
-                                ofProjectChildren.set(projName, []);
-                            }
-                            ofProjectChildren
-                                .get(projName)
-                                .push(marker.taskId);
-                        }
-                    } else if (!marker) {
-                        // New OF task: create in Dagny
-                        // Only push if it belongs to a container mapped to
-                        // this Dagny project
+                        if (marker) continue; // belongs to a different project
+
+                        // New task: skip if not in this mapping
                         if (!taskBelongsToMapping(ofTask, mapping, target)) {
                             continue;
                         }
 
-                        const dagnyTask = buildDagnyTaskFromOF(
-                            ofTask,
-                            projStatusMap,
-                            lib,
-                            usernameToId,
-                            myUserId
+                        // If this task has children, process them first
+                        if (ofTask.hasChildren) {
+                            var groupPred = ofTask.sequential
+                                ? childPredecessor  // first child gets it
+                                : childPredecessor; // all children get it
+                            await processSiblings(
+                                ofTask.children, ofTask.sequential, groupPred
+                            );
+                        }
+
+                        // Build the Dagny task
+                        var dagnyTask = buildDagnyTaskFromOF(
+                            ofTask, projStatusMap, lib, usernameToId, myUserId
                         );
-                        const newId = await lib.createTask(
-                            mapping.dagnyProjectId,
-                            dagnyTask
+
+                        // Compute dependencies
+                        dagnyTask.dependsOn = computeDependencies(
+                            ofTask, i, siblings, isSequential,
+                            predecessor, ofToDagnyId
                         );
-                        // newId is the UUID returned from the API
-                        const taskId =
-                            typeof newId === "string"
-                                ? newId
-                                : newId.taskId || newId;
+
+                        var newId = await lib.createTask(
+                            mapping.dagnyProjectId, dagnyTask
+                        );
+                        var taskId = typeof newId === "string"
+                            ? newId : newId.taskId || newId;
                         lib.setDagnyMarker(
-                            ofTask,
-                            mapping.dagnyProjectName,
-                            taskId
+                            ofTask, mapping.dagnyProjectName, taskId
                         );
+                        ofToDagnyId.set(ofTask.id.primaryKey, taskId);
                         totalCreated++;
 
-                        // Track parent project
-                        if (
-                            (target.type === "folder" ||
-                                target.type === "everything") &&
-                            ofTask.containingProject
-                        ) {
-                            const projName = ofTask.containingProject.name;
-                            if (!ofProjectChildren.has(projName)) {
-                                ofProjectChildren.set(projName, []);
-                            }
-                            ofProjectChildren.get(projName).push(taskId);
+                        // Update reverse dependencies: add this new task
+                        // to the dependsOn of its container or successor
+                        await updateReverseDeps(
+                            ofTask, taskId, i, siblings, isSequential
+                        );
+                    }
+                }
+
+                // After creating a new task, update existing Dagny tasks
+                // that should now depend on it:
+                //   - Parallel container: add to container's dependsOn
+                //   - Last in sequential container: add to container's dependsOn
+                //   - Not last in sequential: add to next sibling's dependsOn
+                // Only patches tasks that already exist in Dagny (new tasks
+                // get correct deps via computeDependencies).
+                async function updateReverseDeps(
+                    ofTask, newDagnyId, index, siblings, isSequential
+                ) {
+                    if (isSequential) {
+                        var isLast = (index === siblings.length - 1);
+                        if (!isLast) {
+                            // Add to next sibling's dependsOn
+                            var nextSibling = siblings[index + 1];
+                            await addToDependsOn(nextSibling, newDagnyId);
+                        } else {
+                            // Last in sequential: add to container's dependsOn
+                            await addToContainerDepsOn(ofTask, newDagnyId);
                         }
+                    } else {
+                        // Parallel: add to container's dependsOn
+                        await addToContainerDepsOn(ofTask, newDagnyId);
+                    }
+                }
+
+                // Add newDepId to an existing Dagny task's dependsOn
+                async function addToDependsOn(ofTask, newDepId) {
+                    var marker = lib.getDagnyMarker(ofTask);
+                    if (!marker || !lib.markerMatchesProject(marker, mapping)) {
+                        return; // not yet in Dagny; will get correct deps when created
+                    }
+                    var existing = dagnyIndex.get(marker.taskId);
+                    var currentDeps = existing && existing.dependsOn
+                        ? existing.dependsOn.slice()
+                        : [];
+                    if (currentDeps.indexOf(newDepId) === -1) {
+                        currentDeps.push(newDepId);
+                        await lib.updateTask(
+                            mapping.dagnyProjectId,
+                            marker.taskId,
+                            { dependsOn: currentDeps }
+                        );
+                        // Update local index so subsequent updates are correct
+                        if (existing) existing.dependsOn = currentDeps;
+                    }
+                }
+
+                // Add newDepId to the container (parent task or project) in Dagny
+                async function addToContainerDepsOn(ofTask, newDepId) {
+                    var parentTask = ofTask.parent;
+                    if (parentTask) {
+                        // Parent is a task group
+                        await addToDependsOn(parentTask, newDepId);
+                    }
+                    // Project-level containers are handled by processProject/syncProjectTasks
+                }
+
+                // Process a project's tasks and track its top-level
+                // children for the [OF Project] dependency task.
+                async function processProject(proj) {
+                    var kids = proj.task.children;
+                    await processSiblings(kids, proj.sequential, null);
+
+                    if (target.type === "folder" || target.type === "everything") {
+                        var childDagnyIds = [];
+                        for (var k = 0; k < kids.length; k++) {
+                            var dagnyId = ofToDagnyId.get(kids[k].id.primaryKey);
+                            if (dagnyId) childDagnyIds.push(dagnyId);
+                        }
+                        if (childDagnyIds.length > 0) {
+                            ofProjectChildren.set(proj.name, childDagnyIds);
+                            ofProjectSequential.set(proj.name, proj.sequential);
+                        }
+                    }
+                }
+
+                // Determine root siblings to process
+                if (target.type === "project" && target.container) {
+                    await processProject(target.container);
+                } else if (target.type === "folder" && target.folder) {
+                    for (var proj of target.folder.flattenedProjects) {
+                        await processProject(proj);
+                    }
+                } else {
+                    for (var proj of flattenedProjects) {
+                        await processProject(proj);
+                    }
+                    var inboxTasks = inbox ? (inbox.tasks || []) : [];
+                    if (inboxTasks.length > 0) {
+                        await processSiblings(inboxTasks, false, null);
                     }
                 }
 
@@ -148,6 +267,7 @@
                     await syncProjectTasks(
                         mapping,
                         ofProjectChildren,
+                        ofProjectSequential,
                         dagnyIndex,
                         projStatusMap,
                         lib
@@ -169,6 +289,66 @@
             await errAlert.show();
         }
     });
+
+    // Compute Dagny dependsOn for a new OF task.
+    //
+    // predecessor: Dagny ID inherited from an ancestor's sequential
+    //   context, propagated through processSiblings. Handles arbitrary
+    //   nesting depth.
+    //
+    // Groups (hasChildren):
+    //   - Parallel group: depends on ALL children
+    //   - Sequential group: depends on LAST child only
+    //   - Groups do NOT depend on their predecessor; it's propagated
+    //     to children via processSiblings.
+    //
+    // Leaf tasks:
+    //   - In sequential context: depend on previous sibling
+    //   - Inherit predecessor from ancestor if applicable:
+    //     * Parallel parent: ALL children get it
+    //     * Sequential parent: only FIRST child gets it
+    function computeDependencies(ofTask, index, siblings, isSequential, predecessor, ofToDagnyId) {
+        var deps = [];
+
+        if (ofTask.hasChildren) {
+            // Group: depend on children (already created)
+            var children = ofTask.children;
+            if (ofTask.sequential && children.length > 0) {
+                var lastDagnyId = ofToDagnyId.get(
+                    children[children.length - 1].id.primaryKey
+                );
+                if (lastDagnyId) deps.push(lastDagnyId);
+            } else {
+                for (var c = 0; c < children.length; c++) {
+                    var childDagnyId = ofToDagnyId.get(
+                        children[c].id.primaryKey
+                    );
+                    if (childDagnyId) deps.push(childDagnyId);
+                }
+            }
+            return deps;
+        }
+
+        // Leaf task in sequential context: depend on previous sibling
+        if (isSequential && index > 0) {
+            var prevDagnyId = ofToDagnyId.get(
+                siblings[index - 1].id.primaryKey
+            );
+            if (prevDagnyId) deps.push(prevDagnyId);
+        }
+
+        // Inherit predecessor from ancestor (propagated through processSiblings).
+        // In a sequential context: only the first child gets it
+        // In a parallel context: all children get it
+        if (predecessor) {
+            var shouldGet = !isSequential || index === 0;
+            if (shouldGet && deps.indexOf(predecessor) === -1) {
+                deps.push(predecessor);
+            }
+        }
+
+        return deps;
+    }
 
     // Check if an OF task belongs to the given mapping's container
     function taskBelongsToMapping(ofTask, mapping, target) {
@@ -307,6 +487,7 @@
     async function syncProjectTasks(
         mapping,
         ofProjectChildren,
+        ofProjectSequential,
         dagnyIndex,
         projStatusMap,
         lib
@@ -317,6 +498,13 @@
         // "[OF Project] <projectName>"
         for (const [projName, childIds] of ofProjectChildren) {
             const dagnyTitle = "[OF Project] " + projName;
+            const isSequential = ofProjectSequential.get(projName) || false;
+
+            // Sequential: project depends only on the last child
+            // Parallel: project depends on all children
+            const deps = isSequential && childIds.length > 0
+                ? [childIds[childIds.length - 1]]
+                : childIds;
 
             // Find existing Dagny task with this title
             let existingProjectTask = null;
@@ -332,7 +520,7 @@
                 await lib.updateTask(
                     mapping.dagnyProjectId,
                     existingProjectTask.taskId,
-                    { dependsOn: childIds }
+                    { dependsOn: deps }
                 );
             } else {
                 // Create new project-level task
@@ -346,7 +534,7 @@
                     title: dagnyTitle,
                     description:
                         "Represents OmniFocus project: " + projName,
-                    dependsOn: childIds,
+                    dependsOn: deps,
                     tags: [],
                     estimate: 1,
                 };
