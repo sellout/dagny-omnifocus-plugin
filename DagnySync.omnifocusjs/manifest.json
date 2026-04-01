@@ -1,0 +1,13 @@
+{
+  "defaultLocale": "en",
+  "identifier": "com.dagny.omnifocus.sync",
+  "author": "Greg Pfeil <greg@technomadic.org>",
+  "description": "Sync tasks and tags between OmniFocus and Dagny.",
+  "version": "0.1.0",
+  "actions": [
+    { "identifier": "configure", "image": "gearshape.fill" },
+    { "identifier": "syncPull", "image": "arrow.down.circle.fill" },
+    { "identifier": "syncPush", "image": "arrow.up.circle.fill" }
+  ],
+  "libraries": [{ "identifier": "dagnyLib" }]
+}
