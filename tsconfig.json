@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "none",
+    "lib": ["ES2017"],
+    "strict": true,
+    "outDir": "DagnySync.omnifocusjs/Resources",
+    "rootDir": "src",
+    "declaration": false,
+    "sourceMap": false,
+    "noEmit": false,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

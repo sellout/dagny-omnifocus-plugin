@@ -48,6 +48,24 @@ in
         inherit pname src;
 
         version = "0.1.0";
+
+        nativeBuildInputs = [pkgs.typescript];
+
+        buildPhase = ''
+          tsc --project tsconfig.json
+        '';
+
+        installPhase = ''
+          mkdir -p $out/DagnySync.omnifocusjs/Resources/en.lproj
+          cp DagnySync.omnifocusjs/manifest.json $out/DagnySync.omnifocusjs/
+          cp DagnySync.omnifocusjs/Resources/dagnyLib.js \
+             DagnySync.omnifocusjs/Resources/configure.js \
+             DagnySync.omnifocusjs/Resources/syncPull.js \
+             DagnySync.omnifocusjs/Resources/syncPush.js \
+             $out/DagnySync.omnifocusjs/Resources/
+          cp DagnySync.omnifocusjs/Resources/en.lproj/*.strings \
+             $out/DagnySync.omnifocusjs/Resources/en.lproj/
+        '';
       });
     };
 
