@@ -84,7 +84,9 @@
         "home-manager": "home-manager",
         "nixpkgs": "nixpkgs",
         "project-manager": "project-manager",
-        "systems": "systems"
+        "systems": [
+          "systems"
+        ]
       },
       "locked": {
         "lastModified": 1774468679,
@@ -323,10 +325,7 @@
           "flaky",
           "nixpkgs"
         ],
-        "systems": [
-          "flaky",
-          "systems"
-        ]
+        "systems": "systems"
       }
     },
     "shellcheck-nix-attributes": {
@@ -347,16 +346,16 @@
     },
     "systems": {
       "locked": {
-        "lastModified": 1726558681,
-        "narHash": "sha256-vta8mxLa5XxpHfb9HCiavFqBrX2xJDvZiKHZOy4kvlA=",
-        "owner": "sellout",
-        "repo": "nix-systems",
-        "rev": "aa9520a9a0f92098d3576c3b4eafcb32c13d6800",
+        "lastModified": 1680978170,
+        "narHash": "sha256-PHVNQ7y0EQYzujQRYoRdb96K0m1KSeAjSrbz2b75S6Q=",
+        "owner": "nix-systems",
+        "repo": "aarch64-darwin",
+        "rev": "75e6c6912484d28ebba5769b794ffa4aff653ba2",
         "type": "github"
       },
       "original": {
-        "owner": "sellout",
-        "repo": "nix-systems",
+        "owner": "nix-systems",
+        "repo": "aarch64-darwin",
         "type": "github"
       }
     },
