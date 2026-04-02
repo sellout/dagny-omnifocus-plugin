@@ -75,7 +75,9 @@
             if (isSequential && i > 0) {
               childPredecessor =
                 ofToDagnyId.get(siblings[i - 1].id.primaryKey) || null;
-            } else if (!isSequential) {
+            } else {
+              // Parallel context or first child of sequential: inherit
+              // predecessor from above so it propagates through nested groups.
               childPredecessor = predecessor;
             }
 
