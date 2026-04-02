@@ -1,5 +1,8 @@
 /result
 /source
+/DagnySync.omnifocusjs/Resources/*.js
+/build/
+/node_modules/
 /.cache/vale/*
 !/.cache/vale/config/
 /.cache/vale/config/*

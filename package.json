@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "devDependencies": {
+    "fast-check": "^3.22.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.1.0"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json && node build.mjs",
+    "test": "npm run build && vitest run"
+  }
+}

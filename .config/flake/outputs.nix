@@ -49,10 +49,11 @@ in
 
         version = "0.1.0";
 
-        nativeBuildInputs = [pkgs.typescript];
+        nativeBuildInputs = [pkgs.typescript pkgs.nodejs];
 
         buildPhase = ''
           tsc --project tsconfig.json
+          node build.mjs
         '';
 
         installPhase = ''
@@ -75,6 +76,19 @@ in
     devShells =
       self.projectConfigurations.${system}.devShells
       // {default = flaky.lib.devShells.default system self [] "";};
-    checks = self.projectConfigurations.${system}.checks;
+    checks = self.projectConfigurations.${system}.checks // {
+      tests = pkgs.stdenv.mkDerivation {
+        name = "${pname}-tests";
+        inherit src;
+        nativeBuildInputs = [pkgs.nodejs pkgs.typescript];
+        buildPhase = ''
+          export HOME=$(mktemp -d)
+          ln -s ${self.packages.${system}.${pname}}/DagnySync.omnifocusjs/Resources DagnySync.omnifocusjs/Resources
+          npm ci
+          npx vitest run
+        '';
+        installPhase = "touch $out";
+      };
+    };
     formatter = self.projectConfigurations.${system}.formatter;
   })

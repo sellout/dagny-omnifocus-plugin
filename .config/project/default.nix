@@ -6,6 +6,12 @@
     summary = "Dagny / OmniFocus integration";
   };
 
+  programs.git.ignores = [
+    "/DagnySync.omnifocusjs/Resources/*.js"
+    "/build/"
+    "/node_modules/"
+  ];
+
   ## There’s no intersection between the systems supported by this flake and the
   ## ones supported by Nix CI.
   ##

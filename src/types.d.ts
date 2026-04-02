@@ -239,6 +239,7 @@ declare const flattenedFolders: NamedCollection<Folder>;
 declare const flattenedTags: NamedCollection<Tag>;
 declare const tags: { beginning: any; ending: any };
 declare const inbox: { ending: any; tasks: Task[]; children: Task[] };
+declare function moveTasks(tasks: Task[], position: any): void;
 
 declare const console: {
   log(...args: any[]): void;

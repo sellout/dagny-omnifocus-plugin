@@ -4,7 +4,7 @@
     "module": "none",
     "lib": ["ES2017"],
     "strict": true,
-    "outDir": "DagnySync.omnifocusjs/Resources",
+    "outDir": "build",
     "rootDir": "src",
     "declaration": false,
     "sourceMap": false,

@@ -73,12 +73,23 @@ interface UserProfile {
 type OFTargetType = "project" | "folder" | "everything";
 type OFAction = "active" | "completed" | "dropped";
 
+type DependencyMode = "conservative" | "optimistic";
+
 interface ProjectMapping {
   dagnyProjectId: string;
   dagnyProjectName: string;
   ofType: OFTargetType;
   ofName: string | null;
   ofDefaultProject: string | null;
+  dependencyMode?: DependencyMode;
+}
+
+// Tree structure computed from Dagny's dependency DAG,
+// describing the intended OF hierarchy.
+interface OFTreeNode {
+  dagnyTaskId: string;
+  sequential: boolean;
+  children: OFTreeNode[];
 }
 
 interface StatusMappingEntry {

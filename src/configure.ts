@@ -98,6 +98,15 @@
             existing ? existing.ofDefaultProject || "" : "",
           ),
         );
+        projForm.addField(
+          new Form.Field.Option(
+            "depmode_" + i,
+            dp.name + " \u2014 Dependency Mode",
+            ["conservative", "optimistic"],
+            ["Conservative (add edges)", "Optimistic (drop edges)"],
+            existing ? existing.dependencyMode || "conservative" : "conservative",
+          ),
+        );
       }
 
       await projForm.show("Project Mapping", "Next");
@@ -133,12 +142,16 @@
           return;
         }
 
+        const depMode: DependencyMode =
+          projForm.values["depmode_" + i] || "conservative";
+
         newMappings.push({
           dagnyProjectId: dp.id,
           dagnyProjectName: dp.name,
           ofType: ofType as OFTargetType,
           ofName: ofName,
           ofDefaultProject: ofDefaultProject,
+          dependencyMode: depMode,
         });
       }
       lib.setProjectMappings(newMappings);
