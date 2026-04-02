@@ -8,28 +8,44 @@
 
     try {
       // ---- Step 1: Connection ----
-      const connForm = new Form();
-      connForm.addField(
-        new Form.Field.String("baseUrl", "Server URL", lib.getBaseUrl()),
-      );
-      connForm.addField(new Form.Field.String("username", "Username", ""));
-      connForm.addField(new Form.Field.Password("password", "Password", ""));
-      await connForm.show("Dagny Connection", "Connect");
+      // Try existing credentials first; only show login form if needed.
+      var loggedIn = false;
+      if (lib.hasCredentials()) {
+        try {
+          await lib.login();
+          await lib.getMe();
+          loggedIn = true;
+        } catch (e) {
+          // Credentials invalid or expired — fall through to form
+        }
+      }
 
-      const baseUrl: string = connForm.values["baseUrl"];
-      const username: string = connForm.values["username"];
-      const password: string = connForm.values["password"];
+      if (!loggedIn) {
+        const connForm = new Form();
+        connForm.addField(
+          new Form.Field.String("baseUrl", "Server URL", lib.getBaseUrl()),
+        );
+        connForm.addField(new Form.Field.String("username", "Username", ""));
+        connForm.addField(
+          new Form.Field.Password("password", "Password", ""),
+        );
+        await connForm.show("Dagny Connection", "Connect");
 
-      lib.setBaseUrl(baseUrl);
+        const baseUrl: string = connForm.values["baseUrl"];
+        const username: string = connForm.values["username"];
+        const password: string = connForm.values["password"];
 
-      await lib.login(username, password);
-      lib.saveCredentials(username, password);
-      const me: UserProfile = await lib.getMe();
-      const connAlert = new Alert(
-        "Connected",
-        "Logged in as " + me.username + " (" + me.email + ")",
-      );
-      await connAlert.show();
+        lib.setBaseUrl(baseUrl);
+
+        await lib.login(username, password);
+        lib.saveCredentials(username, password);
+        const me: UserProfile = await lib.getMe();
+        const connAlert = new Alert(
+          "Connected",
+          "Logged in as " + me.username + " (" + me.email + ")",
+        );
+        await connAlert.show();
+      }
 
       // ---- Step 2: Project Mapping ----
       const dagnyProjects: DagnyProject[] = await lib.getProjects();
