@@ -106,7 +106,7 @@ interface ProjectStatusMapping {
 }
 
 interface DagnyMarker {
-  projectKey: string;
+  projectId: string;
   taskId: string;
 }
 

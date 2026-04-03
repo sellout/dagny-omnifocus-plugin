@@ -147,7 +147,7 @@
               typeof newId === "string"
                 ? newId
                 : (newId as any).taskId || newId;
-            lib.setDagnyMarker(ofTask, mapping.dagnyProjectName, taskId);
+            lib.setDagnyMarker(ofTask, mapping.dagnyProjectId, taskId);
             ofToDagnyId.set(ofTask.id.primaryKey, taskId);
             totalCreated++;
 
@@ -363,7 +363,7 @@
     const patch: DagnyTaskUpdate = {};
 
     patch.title = ofTask.name;
-    patch.description = lib.stripDagnyMarker(ofTask.note);
+    patch.description = ofTask.note || "";
 
     const dagnyStatusId: string | null = lib.dagnyStatusFromOFTask(
       ofTask,
@@ -414,7 +414,7 @@
   ): DagnyTaskCreate {
     const dagnyTask: DagnyTaskCreate = {
       title: ofTask.name,
-      description: lib.stripDagnyMarker(ofTask.note) || "",
+      description: ofTask.note || "",
       dependsOn: [],
       tags: collectDagnyTags(ofTask, lib, usernameToId),
       estimate: ofTask.estimatedMinutes || 1,

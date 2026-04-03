@@ -6,7 +6,6 @@
   const PREF_BASE_URL = "dagnyBaseUrl";
   const PREF_PROJECT_MAPPINGS = "projectMappings";
   const PREF_STATUS_MAPPINGS = "statusMappings";
-  const DAGNY_MARKER_REGEX = /\[dagny:([^\]]+):([a-f0-9-]{36})\]/;
 
   const lib = new PlugIn.Library(new Version("0.1"));
 
@@ -203,12 +202,26 @@
 
   // ---- Sync identity helpers ----
 
-  lib.DAGNY_MARKER_REGEX = DAGNY_MARKER_REGEX;
+  const DAGNY_ATTACHMENT_NAME = "dagny.json";
 
   lib.getDagnyMarker = function (ofTask: Task): DagnyMarker | null {
-    if (!ofTask.note) return null;
-    const match = ofTask.note.match(DAGNY_MARKER_REGEX);
-    if (match) return { projectKey: match[1], taskId: match[2] };
+    for (var i = 0; i < ofTask.attachments.length; i++) {
+      const att = ofTask.attachments[i];
+      if (
+        (att.preferredFilename === DAGNY_ATTACHMENT_NAME ||
+          att.filename === DAGNY_ATTACHMENT_NAME) &&
+        att.contents
+      ) {
+        try {
+          const data = JSON.parse(att.contents.toString());
+          if (data.projectId && data.taskId) {
+            return { projectId: data.projectId, taskId: data.taskId };
+          }
+        } catch (e) {
+          // Malformed attachment — ignore
+        }
+      }
+    }
     return null;
   };
 
@@ -216,30 +229,33 @@
     marker: DagnyMarker,
     mapping: ProjectMapping,
   ): boolean {
-    return (
-      marker.projectKey === mapping.dagnyProjectName ||
-      marker.projectKey === mapping.dagnyProjectId
-    );
+    return marker.projectId === mapping.dagnyProjectId;
   };
 
   lib.setDagnyMarker = function (
     ofTask: Task,
-    dagnyProjectName: string,
+    dagnyProjectId: string,
     dagnyTaskId: string,
   ): void {
-    const marker = "[dagny:" + dagnyProjectName + ":" + dagnyTaskId + "]";
-    if (!ofTask.note) {
-      ofTask.note = marker;
-    } else if (!ofTask.note.match(DAGNY_MARKER_REGEX)) {
-      ofTask.note = ofTask.note + "\n" + marker;
-    } else {
-      ofTask.note = ofTask.note.replace(DAGNY_MARKER_REGEX, marker);
+    // Remove existing dagny.json attachment if present
+    for (var i = ofTask.attachments.length - 1; i >= 0; i--) {
+      const att = ofTask.attachments[i];
+      if (
+        att.preferredFilename === DAGNY_ATTACHMENT_NAME ||
+        att.filename === DAGNY_ATTACHMENT_NAME
+      ) {
+        ofTask.removeAttachmentAtIndex(i);
+      }
     }
-  };
-
-  lib.stripDagnyMarker = function (note: string | null): string {
-    if (!note) return "";
-    return note.replace(DAGNY_MARKER_REGEX, "").trim();
+    const json = JSON.stringify({
+      projectId: dagnyProjectId,
+      taskId: dagnyTaskId,
+    });
+    const wrapper = FileWrapper.withContents(
+      DAGNY_ATTACHMENT_NAME,
+      Data.fromString(json),
+    );
+    ofTask.addAttachment(wrapper);
   };
 
   // ---- Tag helpers ----

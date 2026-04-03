@@ -27,7 +27,7 @@
 
       if (isNew) {
         ofTask = new Task(dt.title, parentPosition);
-        lib.setDagnyMarker(ofTask, mapping.dagnyProjectName, dt.taskId);
+        lib.setDagnyMarker(ofTask, mapping.dagnyProjectId, dt.taskId);
         counters.created++;
       } else {
         moveTasks([ofTask!], parentPosition);
@@ -72,15 +72,10 @@
     lib: any,
   ): void {
     ofTask.name = dt.title;
+    ofTask.note = dt.description || "";
 
-    const description = dt.description || "";
-    const marker =
-      "[dagny:" + mapping.dagnyProjectName + ":" + dt.taskId + "]";
-    if (description) {
-      ofTask.note = description + "\n" + marker;
-    } else {
-      ofTask.note = marker;
-    }
+    // Ensure attachment marker is up to date
+    lib.setDagnyMarker(ofTask, mapping.dagnyProjectId, dt.taskId);
 
     if (dt.estimate != null) {
       ofTask.estimatedMinutes = dt.estimate;

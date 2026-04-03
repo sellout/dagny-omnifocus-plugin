@@ -35,6 +35,7 @@ declare class Task implements DatabaseObject {
   beginning: any;
   ending: any;
   flattenedTasks: Task[];
+  attachments: FileWrapper[];
   markComplete(date?: Date): void;
   markIncomplete(): void;
   drop(allOccurrences: boolean): void;
@@ -42,6 +43,8 @@ declare class Task implements DatabaseObject {
   addTags(tags: Tag[]): void;
   removeTag(tag: Tag): void;
   removeTags(tags: Tag[]): void;
+  addAttachment(attachment: FileWrapper): void;
+  removeAttachmentAtIndex(index: number): void;
 }
 
 declare namespace Task {
@@ -229,6 +232,20 @@ declare namespace Form {
 declare class Alert {
   constructor(title: string, message: string);
   show(): Promise<number>;
+}
+
+// ---- FileWrapper & Data ----
+
+declare class Data {
+  static fromString(str: string): Data;
+  toString(): string;
+}
+
+declare class FileWrapper {
+  static withContents(name: string | null, contents: Data): FileWrapper;
+  contents: Data | null;
+  preferredFilename: string | null;
+  filename: string | null;
 }
 
 // ---- Globals ----
