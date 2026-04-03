@@ -86,8 +86,9 @@
       ofTask.estimatedMinutes = dt.estimate;
     }
 
-    const ev = dt.effectiveValue != null ? dt.effectiveValue : dt.value;
-    ofTask.flagged = ev != null && ev > 0;
+    // Flag based on value (not effectiveValue) since OF propagates
+    // flags to children similarly to how Dagny propagates priority.
+    ofTask.flagged = dt.value != null && dt.value > 0;
 
     if (dt.statusId) {
       lib.applyStatusToOFTask(ofTask, dt.statusId, projStatusMap);
