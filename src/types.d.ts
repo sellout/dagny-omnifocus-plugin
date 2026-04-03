@@ -231,6 +231,7 @@ declare namespace Form {
 
 declare class Alert {
   constructor(title: string, message: string);
+  addOption(title: string): void;
   show(): Promise<number>;
 }
 

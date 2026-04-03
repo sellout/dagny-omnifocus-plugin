@@ -7,7 +7,8 @@
   "actions": [
     { "identifier": "configure", "image": "gearshape.fill" },
     { "identifier": "syncPull", "image": "arrow.down.circle.fill" },
-    { "identifier": "syncPush", "image": "arrow.up.circle.fill" }
+    { "identifier": "syncPush", "image": "arrow.up.circle.fill" },
+    { "identifier": "removeMapping", "image": "minus.circle.fill" }
   ],
   "libraries": [{ "identifier": "dagnyLib" }]
 }

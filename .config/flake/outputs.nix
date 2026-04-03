@@ -63,6 +63,7 @@ in
              DagnySync.omnifocusjs/Resources/configure.js \
              DagnySync.omnifocusjs/Resources/syncPull.js \
              DagnySync.omnifocusjs/Resources/syncPush.js \
+             DagnySync.omnifocusjs/Resources/removeMapping.js \
              $out/DagnySync.omnifocusjs/Resources/
           cp DagnySync.omnifocusjs/Resources/en.lproj/*.strings \
              $out/DagnySync.omnifocusjs/Resources/en.lproj/

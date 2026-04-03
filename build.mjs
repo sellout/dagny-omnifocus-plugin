@@ -11,7 +11,7 @@ const out = join("DagnySync.omnifocusjs", "Resources");
 mkdirSync(out, { recursive: true });
 
 // Files that are copied directly
-for (const f of ["dagnyLib.js", "configure.js", "syncPush.js"]) {
+for (const f of ["dagnyLib.js", "configure.js", "syncPush.js", "removeMapping.js"]) {
   copyFileSync(join(build, f), join(out, f));
 }
 
