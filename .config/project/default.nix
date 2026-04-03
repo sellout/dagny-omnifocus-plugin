@@ -1,6 +1,10 @@
 ### All available options for this file are listed in
 ### https://sellout.github.io/project-manager/options.xhtml
-{lib, ...}: {
+{
+  config,
+  lib,
+  ...
+}: {
   project = {
     name = "dagny-omnifocus-plugin";
     summary = "Dagny / OmniFocus integration";
@@ -10,6 +14,12 @@
     "/DagnySync.omnifocusjs/Resources/*.js"
     "/build/"
     "/node_modules/"
+  ];
+
+  programs.vale.vocab.${config.project.name}.accept = [
+    "Dagny"
+    "formatters"
+    "OmniFocus"
   ];
 
   ## There’s no intersection between the systems supported by this flake and the

@@ -5,3 +5,6 @@ garnix
 [Nn]ix
 Pfeil
 ShellCheck
+Dagny
+formatters
+OmniFocus
