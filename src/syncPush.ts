@@ -90,6 +90,7 @@
                 lib,
                 usernameToId,
                 myUserId,
+                mapping.estimateMultiplier || 1,
               );
               if (patch) {
                 await lib.updateTask(
@@ -131,6 +132,7 @@
               lib,
               usernameToId,
               myUserId,
+              mapping.estimateMultiplier || 1,
             );
 
             dagnyTask.dependsOn = computeDependencies(
@@ -359,6 +361,7 @@
     lib: any,
     usernameToId: Map<string, string>,
     myUserId: string,
+    estimateMultiplier: number,
   ): DagnyTaskUpdate {
     const patch: DagnyTaskUpdate = {};
 
@@ -376,7 +379,7 @@
     patch.tags = collectDagnyTags(ofTask, lib, usernameToId);
 
     if (ofTask.estimatedMinutes != null) {
-      patch.estimate = ofTask.estimatedMinutes;
+      patch.estimate = Math.round(ofTask.estimatedMinutes / estimateMultiplier);
     }
 
     if (ofTask.flagged) {
@@ -411,13 +414,14 @@
     lib: any,
     usernameToId: Map<string, string>,
     myUserId: string,
+    estimateMultiplier: number,
   ): DagnyTaskCreate {
     const dagnyTask: DagnyTaskCreate = {
       title: ofTask.name,
       description: ofTask.note || "",
       dependsOn: [],
       tags: collectDagnyTags(ofTask, lib, usernameToId),
-      estimate: ofTask.estimatedMinutes || 1,
+      estimate: Math.round((ofTask.estimatedMinutes || 1) / estimateMultiplier),
       value: ofTask.flagged ? 1 : null,
     };
 

@@ -82,6 +82,7 @@ interface ProjectMapping {
   ofName: string | null;
   ofDefaultProject: string | null;
   dependencyMode?: DependencyMode;
+  estimateMultiplier?: number; // minutes per Dagny estimate unit
 }
 
 // Tree structure computed from Dagny's dependency DAG,

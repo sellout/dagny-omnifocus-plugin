@@ -78,7 +78,8 @@
     lib.setDagnyMarker(ofTask, mapping.dagnyProjectId, dt.taskId);
 
     if (dt.estimate != null) {
-      ofTask.estimatedMinutes = dt.estimate;
+      const mult = mapping.estimateMultiplier || 1;
+      ofTask.estimatedMinutes = dt.estimate * mult;
     }
 
     // Flag based on value (not effectiveValue) since OF propagates

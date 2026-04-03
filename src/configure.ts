@@ -107,6 +107,15 @@
             existing ? existing.dependencyMode || "conservative" : "conservative",
           ),
         );
+        projForm.addField(
+          new Form.Field.String(
+            "estmult_" + i,
+            dp.name + " \u2014 Minutes per estimate unit",
+            existing && existing.estimateMultiplier
+              ? String(existing.estimateMultiplier)
+              : "1",
+          ),
+        );
       }
 
       await projForm.show("Project Mapping", "Next");
@@ -144,6 +153,7 @@
 
         const depMode: DependencyMode =
           projForm.values["depmode_" + i] || "conservative";
+        const estMult = parseFloat(projForm.values["estmult_" + i]) || 1;
 
         newMappings.push({
           dagnyProjectId: dp.id,
@@ -152,6 +162,7 @@
           ofName: ofName,
           ofDefaultProject: ofDefaultProject,
           dependencyMode: depMode,
+          estimateMultiplier: estMult,
         });
       }
       lib.setProjectMappings(newMappings);
