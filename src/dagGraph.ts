@@ -12,7 +12,11 @@ function buildDag(tasks: DagnyTaskWithId[]): {
   const taskIds = new Set<string>();
 
   for (const t of tasks) {
-    if (t.title.startsWith("[OF Project] ")) continue;
+    if (
+      t.title.startsWith("[OF Project] ") ||
+      t.title.startsWith("[OF Folder] ")
+    )
+      continue;
     taskIds.add(t.taskId);
     dependsOn.set(t.taskId, new Set<string>());
     dependedOnBy.set(t.taskId, new Set<string>());

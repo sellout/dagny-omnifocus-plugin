@@ -244,7 +244,7 @@
           (target.type === "folder" || target.type === "everything") &&
           ofProjectChildren.size > 0
         ) {
-          await syncProjectTasks(
+          const projectDagnyIds = await syncProjectTasks(
             mapping,
             ofProjectChildren,
             ofProjectSequential,
@@ -252,6 +252,22 @@
             projStatusMap,
             lib,
           );
+
+          const foldersToSync: Folder[] =
+            target.type === "folder" && target.folder
+              ? (target.folder.flattenedFolders as Folder[])
+              : (flattenedFolders as Folder[]);
+
+          if (foldersToSync.length > 0) {
+            await syncFolderTasks(
+              mapping,
+              foldersToSync,
+              projectDagnyIds,
+              dagnyIndex,
+              projStatusMap,
+              lib,
+            );
+          }
         }
       }
 
@@ -462,7 +478,8 @@
     dagnyIndex: Map<string, DagnyTaskWithId>,
     projStatusMap: ProjectStatusMapping | undefined,
     lib: any,
-  ): Promise<void> {
+  ): Promise<Map<string, string>> {
+    const projectDagnyIds = new Map<string, string>();
     for (const [projName, childIds] of ofProjectChildren) {
       const dagnyTitle = "[OF Project] " + projName;
       const isSequential = ofProjectSequential.get(projName) || false;
@@ -486,6 +503,7 @@
           existingProjectTask.taskId,
           { dependsOn: deps },
         );
+        projectDagnyIds.set(projName, existingProjectTask.taskId);
       } else {
         const defaultStatus: StatusMappingEntry | undefined = projStatusMap
           ? projStatusMap.mappings.find(
@@ -503,7 +521,90 @@
         if (defaultStatus) {
           projectTask.statusId = defaultStatus.dagnyStatusId;
         }
-        await lib.createTask(mapping.dagnyProjectId, projectTask);
+        var newId = await lib.createTask(mapping.dagnyProjectId, projectTask);
+        var taskId: string =
+          typeof newId === "string" ? newId : (newId as any).taskId || newId;
+        projectDagnyIds.set(projName, taskId);
+      }
+    }
+    return projectDagnyIds;
+  }
+
+  async function syncFolderTasks(
+    mapping: ProjectMapping,
+    folders: Folder[],
+    projectDagnyIds: Map<string, string>,
+    dagnyIndex: Map<string, DagnyTaskWithId>,
+    projStatusMap: ProjectStatusMapping | undefined,
+    lib: any,
+  ): Promise<void> {
+    function folderDepth(f: Folder): number {
+      var d = 0;
+      var p = f.parent;
+      while (p) {
+        d++;
+        p = p.parent;
+      }
+      return d;
+    }
+
+    const sorted = folders.slice().sort(function (a: Folder, b: Folder) {
+      return folderDepth(b) - folderDepth(a);
+    });
+
+    const folderDagnyIds = new Map<string, string>();
+
+    for (const folder of sorted) {
+      const dagnyTitle = "[OF Folder] " + folder.name;
+      const deps: string[] = [];
+
+      for (const proj of folder.projects) {
+        var projId = projectDagnyIds.get(proj.name);
+        if (projId) deps.push(projId);
+      }
+      for (const child of folder.folders) {
+        var folderId = folderDagnyIds.get(child.name);
+        if (folderId) deps.push(folderId);
+      }
+
+      if (deps.length === 0) continue;
+
+      let existingFolderTask: DagnyTaskWithId | null = null;
+      for (const [id, dt] of dagnyIndex) {
+        if (dt.title === dagnyTitle) {
+          existingFolderTask = dt;
+          break;
+        }
+      }
+
+      if (existingFolderTask) {
+        await lib.updateTask(
+          mapping.dagnyProjectId,
+          existingFolderTask.taskId,
+          { dependsOn: deps },
+        );
+        folderDagnyIds.set(folder.name, existingFolderTask.taskId);
+      } else {
+        const defaultStatus: StatusMappingEntry | undefined = projStatusMap
+          ? projStatusMap.mappings.find(
+              (m: StatusMappingEntry) => m.ofAction === "active" && m.isDefault,
+            )
+          : undefined;
+
+        const folderTask: DagnyTaskCreate = {
+          title: dagnyTitle,
+          description: "Represents OmniFocus folder: " + folder.name,
+          dependsOn: deps,
+          tags: [],
+          estimate: 1,
+        };
+        if (defaultStatus) {
+          folderTask.statusId = defaultStatus.dagnyStatusId;
+        }
+        var newId = await lib.createTask(mapping.dagnyProjectId, folderTask);
+        var taskId: string =
+          typeof newId === "string" ? newId : (newId as any).taskId || newId;
+        folderDagnyIds.set(folder.name, taskId);
       }
     }
   }
