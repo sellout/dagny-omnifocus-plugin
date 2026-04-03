@@ -8,6 +8,38 @@
   pname = "dagny-omnifocus-plugin";
 
   supportedSystems = import systems;
+
+  localPackages = pkgs: {
+    "${pname}" = pkgs.checkedDrv (pkgs.stdenv.mkDerivation {
+      inherit pname;
+      version = "0.1.0";
+
+      src = pkgs.lib.cleanSource ../..;
+
+      nativeBuildInputs = [
+        pkgs.nodejs
+        pkgs.typescript
+      ];
+
+      buildPhase = ''
+        tsc --project tsconfig.json
+        node build.mjs
+      '';
+
+      installPhase = ''
+        mkdir -p $out/DagnySync.omnifocusjs/Resources/en.lproj
+        cp DagnySync.omnifocusjs/manifest.json $out/DagnySync.omnifocusjs/
+        cp DagnySync.omnifocusjs/Resources/dagnyLib.js \
+           DagnySync.omnifocusjs/Resources/configure.js \
+           DagnySync.omnifocusjs/Resources/syncPull.js \
+           DagnySync.omnifocusjs/Resources/syncPush.js \
+           DagnySync.omnifocusjs/Resources/removeMapping.js \
+           $out/DagnySync.omnifocusjs/Resources/
+        cp DagnySync.omnifocusjs/Resources/en.lproj/*.strings \
+           $out/DagnySync.omnifocusjs/Resources/en.lproj/
+      '';
+    });
+  };
 in
   {
     schemas = {
@@ -23,7 +55,10 @@ in
         ;
     };
 
-    overlays.default = final: prev: {};
+    overlays.default = nixpkgs.lib.composeManyExtensions [
+      flaky.overlays.default
+      (final: prev: localPackages final)
+    ];
 
     lib = {};
 
@@ -33,43 +68,20 @@ in
         (flaky.lib.homeConfigurations.example self
           [({pkgs, ...}: {home.packages = [pkgs.${pname}];})])
         supportedSystems);
+
+    ## This project doesn’t support any systems that Nix Ci currently does.
+    nix-ci.enable = false;
   }
   // flake-utils.lib.eachSystem supportedSystems (system: let
     pkgs = nixpkgs.legacyPackages.${system}.appendOverlays [
       flaky.overlays.default
     ];
-
-    src = pkgs.lib.cleanSource ../..;
   in {
-    packages = {
-      default = self.packages.${system}.${pname};
-
-      "${pname}" = pkgs.checkedDrv (pkgs.stdenv.mkDerivation {
-        inherit pname src;
-
-        version = "0.1.0";
-
-        nativeBuildInputs = [pkgs.typescript pkgs.nodejs];
-
-        buildPhase = ''
-          tsc --project tsconfig.json
-          node build.mjs
-        '';
-
-        installPhase = ''
-          mkdir -p $out/DagnySync.omnifocusjs/Resources/en.lproj
-          cp DagnySync.omnifocusjs/manifest.json $out/DagnySync.omnifocusjs/
-          cp DagnySync.omnifocusjs/Resources/dagnyLib.js \
-             DagnySync.omnifocusjs/Resources/configure.js \
-             DagnySync.omnifocusjs/Resources/syncPull.js \
-             DagnySync.omnifocusjs/Resources/syncPush.js \
-             DagnySync.omnifocusjs/Resources/removeMapping.js \
-             $out/DagnySync.omnifocusjs/Resources/
-          cp DagnySync.omnifocusjs/Resources/en.lproj/*.strings \
-             $out/DagnySync.omnifocusjs/Resources/en.lproj/
-        '';
-      });
-    };
+    packages =
+      {
+        default = self.packages.${system}.${pname};
+      }
+      // localPackages pkgs;
 
     projectConfigurations =
       flaky.lib.projectConfigurations.default {inherit pkgs self;};
@@ -82,12 +94,19 @@ in
       // {
         tests = pkgs.stdenv.mkDerivation {
           name = "${pname}-tests";
-          inherit src;
-          nativeBuildInputs = [pkgs.nodejs pkgs.typescript];
+          __darwinAllowLocalNetworking = true;
+          src = pkgs.lib.cleanSource ../..;
+          npmDeps = pkgs.fetchNpmDeps {
+            src = pkgs.lib.cleanSource ../..;
+            hash = "sha256-sd0HCYZ/aDyGN8PCMc6m4maxBVPkXiDWDKotgW7bbXQ=";
+          };
+          nativeBuildInputs = [
+            pkgs.nodejs
+            pkgs.npmHooks.npmConfigHook
+            pkgs.typescript
+          ];
           buildPhase = ''
-            export HOME=$(mktemp -d)
-            ln -s ${self.packages.${system}.${pname}}/DagnySync.omnifocusjs/Resources DagnySync.omnifocusjs/Resources
-            npm ci
+            tsc --project tsconfig.json
             npx vitest run
           '';
           installPhase = "touch $out";
