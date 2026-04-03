@@ -181,8 +181,7 @@
           dagnyTaskMap.set(dt.taskId, dt);
         }
 
-        const mode: DependencyMode =
-          mapping.dependencyMode || "conservative";
+        const mode: DependencyMode = mapping.dependencyMode || "conservative";
         const tree = dagToTree(dagnyTasks, mode);
 
         const rootPosition = lib.insertionLocationForTarget(target);

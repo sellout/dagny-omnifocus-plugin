@@ -26,9 +26,7 @@
           new Form.Field.String("baseUrl", "Server URL", lib.getBaseUrl()),
         );
         connForm.addField(new Form.Field.String("username", "Username", ""));
-        connForm.addField(
-          new Form.Field.Password("password", "Password", ""),
-        );
+        connForm.addField(new Form.Field.Password("password", "Password", ""));
         await connForm.show("Dagny Connection", "Connect");
 
         const baseUrl: string = connForm.values["baseUrl"];
@@ -104,7 +102,9 @@
             dp.name + " \u2014 Dependency Mode",
             ["conservative", "optimistic"],
             ["Conservative (add edges)", "Optimistic (drop edges)"],
-            existing ? existing.dependencyMode || "conservative" : "conservative",
+            existing
+              ? existing.dependencyMode || "conservative"
+              : "conservative",
           ),
         );
         projForm.addField(

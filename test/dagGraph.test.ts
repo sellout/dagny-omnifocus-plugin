@@ -34,9 +34,7 @@ function makeTask(id: string, dependsOn: string[] = []): DagnyTaskWithId {
   };
 }
 
-function makeDeps(
-  ...pairs: [string, string[]][]
-): Map<string, Set<string>> {
+function makeDeps(...pairs: [string, string[]][]): Map<string, Set<string>> {
   const m = new Map<string, Set<string>>();
   for (const [id, deps] of pairs) {
     m.set(id, new Set(deps));
@@ -135,10 +133,7 @@ describe("transitiveReduction", () => {
       ["B", ["D"]],
       ["D", []],
     );
-    const reduced = transitiveReduction(
-      deps,
-      new Set(["X", "A", "B", "D"]),
-    );
+    const reduced = transitiveReduction(deps, new Set(["X", "A", "B", "D"]));
     expect(reduced.get("X")).toEqual(new Set(["A", "B"]));
     expect(reduced.get("A")).toEqual(new Set(["D"]));
     expect(reduced.get("B")).toEqual(new Set(["D"]));
@@ -231,11 +226,7 @@ describe("dagToTree", () => {
     // C depends on B, B depends on A.
     // Before flattening: C(seq) -> [B(seq) -> [A]]
     // After flattening (root is sequential): [A, B, C] as flat siblings
-    const tasks = [
-      makeTask("A"),
-      makeTask("B", ["A"]),
-      makeTask("C", ["B"]),
-    ];
+    const tasks = [makeTask("A"), makeTask("B", ["A"]), makeTask("C", ["B"])];
     const tree = dagToTree(tasks, "conservative");
     expect(tree).toHaveLength(3);
     expect(tree[0].dagnyTaskId).toBe("A");
@@ -248,19 +239,13 @@ describe("dagToTree", () => {
 
   it("produces parallel group for fan-in", () => {
     // X depends on [A, B] where A, B are independent
-    const tasks = [
-      makeTask("A"),
-      makeTask("B"),
-      makeTask("X", ["A", "B"]),
-    ];
+    const tasks = [makeTask("A"), makeTask("B"), makeTask("X", ["A", "B"])];
     const tree = dagToTree(tasks, "conservative");
     expect(tree).toHaveLength(1);
     expect(tree[0].dagnyTaskId).toBe("X");
     expect(tree[0].sequential).toBe(false);
     expect(tree[0].children).toHaveLength(2);
-    const childIds = new Set(
-      tree[0].children.map((c: any) => c.dagnyTaskId),
-    );
+    const childIds = new Set(tree[0].children.map((c: any) => c.dagnyTaskId));
     expect(childIds).toEqual(new Set(["A", "B"]));
   });
 
@@ -309,7 +294,11 @@ describe("dagToTree", () => {
     const tasks = [makeTask("A"), makeTask("B"), makeTask("C")];
     const tree = dagToTree(tasks, "conservative");
     expect(tree).toHaveLength(3);
-    const ids = new Set(tree.map(function (n: any) { return n.dagnyTaskId; }));
+    const ids = new Set(
+      tree.map(function (n: any) {
+        return n.dagnyTaskId;
+      }),
+    );
     expect(ids).toEqual(new Set(["A", "B", "C"]));
   });
 
@@ -386,55 +375,65 @@ describe("dagToTree", () => {
 // ---- Property-based tests ----
 
 // Arbitrary for a DAG: generate n tasks with random acyclic edges
-const dagArbitrary = fc
-  .integer({ min: 1, max: 20 })
-  .chain(function (n) {
-    // Generate task IDs
-    const ids = Array.from({ length: n }, function (_, i) {
-      return "t" + i;
-    });
-    // For each task, generate a subset of earlier tasks as dependencies
-    // (ensures acyclicity: task i can only depend on tasks 0..i-1)
-    return fc
-      .tuple(
-        ...ids.map(function (id, i) {
-          if (i === 0) return fc.constant([]);
-          return fc.subarray(ids.slice(0, i));
-        }),
-      )
-      .map(function (depsList) {
-        return ids.map(function (id, i) {
-          return makeTask(id, depsList[i] as string[]);
-        });
-      });
+const dagArbitrary = fc.integer({ min: 1, max: 20 }).chain(function (n) {
+  // Generate task IDs
+  const ids = Array.from({ length: n }, function (_, i) {
+    return "t" + i;
   });
+  // For each task, generate a subset of earlier tasks as dependencies
+  // (ensures acyclicity: task i can only depend on tasks 0..i-1)
+  return fc
+    .tuple(
+      ...ids.map(function (id, i) {
+        if (i === 0) return fc.constant([]);
+        return fc.subarray(ids.slice(0, i));
+      }),
+    )
+    .map(function (depsList) {
+      return ids.map(function (id, i) {
+        return makeTask(id, depsList[i] as string[]);
+      });
+    });
+});
 
 describe("dagToTree properties", () => {
   it("every task appears exactly once in the tree", () => {
     fc.assert(
-      fc.property(dagArbitrary, fc.constantFrom("conservative" as const, "optimistic" as const), function (tasks, mode) {
-        const tree = dagToTree(tasks, mode);
-        const treeIds = collectAllIds(tree);
-        const inputIds = new Set(tasks.map(function (t: any) { return t.taskId; }));
-        expect(treeIds).toEqual(inputIds);
-      }),
+      fc.property(
+        dagArbitrary,
+        fc.constantFrom("conservative" as const, "optimistic" as const),
+        function (tasks, mode) {
+          const tree = dagToTree(tasks, mode);
+          const treeIds = collectAllIds(tree);
+          const inputIds = new Set(
+            tasks.map(function (t: any) {
+              return t.taskId;
+            }),
+          );
+          expect(treeIds).toEqual(inputIds);
+        },
+      ),
     );
   });
 
   it("tree has no duplicate task IDs", () => {
     fc.assert(
-      fc.property(dagArbitrary, fc.constantFrom("conservative" as const, "optimistic" as const), function (tasks, mode) {
-        const tree = dagToTree(tasks, mode);
-        const ids: string[] = [];
-        function collect(nodes: any[]) {
-          for (const n of nodes) {
-            ids.push(n.dagnyTaskId);
-            if (n.children) collect(n.children);
+      fc.property(
+        dagArbitrary,
+        fc.constantFrom("conservative" as const, "optimistic" as const),
+        function (tasks, mode) {
+          const tree = dagToTree(tasks, mode);
+          const ids: string[] = [];
+          function collect(nodes: any[]) {
+            for (const n of nodes) {
+              ids.push(n.dagnyTaskId);
+              if (n.children) collect(n.children);
+            }
           }
-        }
-        collect(tree);
-        expect(ids.length).toBe(new Set(ids).size);
-      }),
+          collect(tree);
+          expect(ids.length).toBe(new Set(ids).size);
+        },
+      ),
     );
   });
 
@@ -442,7 +441,9 @@ describe("dagToTree properties", () => {
     fc.assert(
       fc.property(dagArbitrary, function (tasks) {
         const deps = new Map<string, Set<string>>();
-        const ids = tasks.map(function (t: any) { return t.taskId; });
+        const ids = tasks.map(function (t: any) {
+          return t.taskId;
+        });
         for (const t of tasks) {
           deps.set(t.taskId, new Set(t.dependsOn));
         }
@@ -463,9 +464,16 @@ describe("dagToTree properties", () => {
         const taskIds = new Set<string>();
         for (const t of tasks) {
           taskIds.add(t.taskId);
-          original.set(t.taskId, new Set(t.dependsOn.filter(function (d: string) {
-            return tasks.some(function (t2: any) { return t2.taskId === d; });
-          })));
+          original.set(
+            t.taskId,
+            new Set(
+              t.dependsOn.filter(function (d: string) {
+                return tasks.some(function (t2: any) {
+                  return t2.taskId === d;
+                });
+              }),
+            ),
+          );
         }
         const reduced = transitiveReduction(original, taskIds);
         // Every pair reachable in original should be reachable in reduced
@@ -487,9 +495,16 @@ describe("dagToTree properties", () => {
         const taskIds = new Set<string>();
         for (const t of tasks) {
           taskIds.add(t.taskId);
-          original.set(t.taskId, new Set(t.dependsOn.filter(function (d: string) {
-            return tasks.some(function (t2: any) { return t2.taskId === d; });
-          })));
+          original.set(
+            t.taskId,
+            new Set(
+              t.dependsOn.filter(function (d: string) {
+                return tasks.some(function (t2: any) {
+                  return t2.taskId === d;
+                });
+              }),
+            ),
+          );
         }
         const reduced = transitiveReduction(original, taskIds);
         for (const [id, deps] of reduced) {

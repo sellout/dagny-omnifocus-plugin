@@ -11,7 +11,12 @@ const out = join("DagnySync.omnifocusjs", "Resources");
 mkdirSync(out, { recursive: true });
 
 // Files that are copied directly
-for (const f of ["dagnyLib.js", "configure.js", "syncPush.js", "removeMapping.js"]) {
+for (const f of [
+  "dagnyLib.js",
+  "configure.js",
+  "syncPush.js",
+  "removeMapping.js",
+]) {
   copyFileSync(join(build, f), join(out, f));
 }
 
@@ -19,8 +24,10 @@ for (const f of ["dagnyLib.js", "configure.js", "syncPush.js", "removeMapping.js
 // dagGraph.js contains top-level function declarations.
 // syncPull.js is an IIFE that references them.
 // We inject dagGraph's functions inside syncPull's IIFE.
-const dagGraph = readFileSync(join(build, "dagGraph.js"), "utf-8")
-  .replace(/^"use strict";\s*/, "");
+const dagGraph = readFileSync(join(build, "dagGraph.js"), "utf-8").replace(
+  /^"use strict";\s*/,
+  "",
+);
 const syncPull = readFileSync(join(build, "syncPull.js"), "utf-8");
 
 // Insert dagGraph functions right after the IIFE opening

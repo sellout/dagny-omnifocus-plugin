@@ -77,19 +77,21 @@ in
     devShells =
       self.projectConfigurations.${system}.devShells
       // {default = flaky.lib.devShells.default system self [] "";};
-    checks = self.projectConfigurations.${system}.checks // {
-      tests = pkgs.stdenv.mkDerivation {
-        name = "${pname}-tests";
-        inherit src;
-        nativeBuildInputs = [pkgs.nodejs pkgs.typescript];
-        buildPhase = ''
-          export HOME=$(mktemp -d)
-          ln -s ${self.packages.${system}.${pname}}/DagnySync.omnifocusjs/Resources DagnySync.omnifocusjs/Resources
-          npm ci
-          npx vitest run
-        '';
-        installPhase = "touch $out";
+    checks =
+      self.projectConfigurations.${system}.checks
+      // {
+        tests = pkgs.stdenv.mkDerivation {
+          name = "${pname}-tests";
+          inherit src;
+          nativeBuildInputs = [pkgs.nodejs pkgs.typescript];
+          buildPhase = ''
+            export HOME=$(mktemp -d)
+            ln -s ${self.packages.${system}.${pname}}/DagnySync.omnifocusjs/Resources DagnySync.omnifocusjs/Resources
+            npm ci
+            npx vitest run
+          '';
+          installPhase = "touch $out";
+        };
       };
-    };
     formatter = self.projectConfigurations.${system}.formatter;
   })
