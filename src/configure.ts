@@ -58,131 +58,124 @@
 
       const existingMappings: ProjectMapping[] = lib.getProjectMappings();
 
-      const projForm = new Form();
-      const ofTypeOptions = ["skip", "project", "folder", "everything"];
+      const projIds = dagnyProjects.map((dp: DagnyProject) => dp.id);
+      const projNames = dagnyProjects.map((dp: DagnyProject) => dp.name);
+
+      // ---- Infer defaults from OF selection ----
+      const selectedProject: Project | null =
+        selection.projects.length > 0 ? selection.projects[0] : null;
+      const selectedFolder: Folder | null =
+        selection.folders.length > 0 ? selection.folders[0] : null;
+      const selectedTask: Task | null =
+        selection.tasks.length > 0 ? selection.tasks[0] : null;
+
+      var contextOfType: OFTargetType = "project";
+      var contextOfName = "";
+      if (selectedFolder) {
+        contextOfType = "folder";
+        contextOfName = selectedFolder.name;
+      } else if (selectedProject) {
+        contextOfType = "project";
+        contextOfName = selectedProject.name;
+      } else if (selectedTask && selectedTask.containingProject) {
+        contextOfType = "project";
+        contextOfName = selectedTask.containingProject.name;
+      }
+
+      // If the OF selection already has a mapping, default to that
+      // Dagny project; otherwise default to the first project.
+      var defaultDagnyId = projIds[0];
+      if (contextOfName) {
+        const matchingMapping = existingMappings.find(
+          (m: ProjectMapping) => m.ofName === contextOfName,
+        );
+        if (matchingMapping) {
+          defaultDagnyId = matchingMapping.dagnyProjectId;
+        }
+      }
+
+      // ---- Step 2: Pick Dagny project ----
+      const pickForm = new Form();
+      pickForm.addField(
+        new Form.Field.Option(
+          "project",
+          "Dagny Project",
+          projIds,
+          projNames,
+          defaultDagnyId,
+        ),
+      );
+      await pickForm.show("Configure Mapping", "Next");
+
+      const selectedId: string = pickForm.values["project"];
+      const selectedDagny = dagnyProjects.find(
+        (dp: DagnyProject) => dp.id === selectedId,
+      )!;
+
+      // Populate from existing mapping if one exists, otherwise from
+      // OF selection context.
+      const existing = existingMappings.find(
+        (m: ProjectMapping) => m.dagnyProjectId === selectedId,
+      );
+
+      // ---- Step 3: Settings + status mapping ----
+      const ofTypeOptions = ["project", "folder", "everything"];
       const ofTypeLabels = [
-        "Skip",
         "OmniFocus Project",
         "OmniFocus Folder",
         "Everything",
       ];
+      const ofActions = ["active", "completed", "dropped"];
+      const ofLabels = ["Active", "Completed", "Dropped"];
 
-      for (let i = 0; i < dagnyProjects.length; i++) {
-        const dp = dagnyProjects[i];
-        const existing = existingMappings.find(
-          (m: ProjectMapping) => m.dagnyProjectId === dp.id,
-        );
+      const settingsForm = new Form();
+      settingsForm.addField(
+        new Form.Field.Option(
+          "type",
+          "Map to",
+          ofTypeOptions,
+          ofTypeLabels,
+          existing ? existing.ofType : contextOfType,
+        ),
+      );
+      settingsForm.addField(
+        new Form.Field.String(
+          "name",
+          "OF Name",
+          existing ? existing.ofName || "" : contextOfName,
+        ),
+      );
+      settingsForm.addField(
+        new Form.Field.String(
+          "default",
+          "Default Project (folder mode)",
+          existing ? existing.ofDefaultProject || "" : "",
+        ),
+      );
+      settingsForm.addField(
+        new Form.Field.Option(
+          "depmode",
+          "Dependency Mode",
+          ["conservative", "optimistic"],
+          ["Conservative (add edges)", "Optimistic (drop edges)"],
+          existing ? existing.dependencyMode || "conservative" : "conservative",
+        ),
+      );
+      settingsForm.addField(
+        new Form.Field.String(
+          "estmult",
+          "Minutes per estimate unit",
+          existing && existing.estimateMultiplier
+            ? String(existing.estimateMultiplier)
+            : "1",
+        ),
+      );
 
-        projForm.addField(
-          new Form.Field.Option(
-            "type_" + i,
-            dp.name + " \u2014 Map to",
-            ofTypeOptions,
-            ofTypeLabels,
-            existing ? existing.ofType : "skip",
-          ),
-        );
-        projForm.addField(
-          new Form.Field.String(
-            "name_" + i,
-            dp.name + " \u2014 OF Name",
-            existing ? existing.ofName || "" : "",
-          ),
-        );
-        projForm.addField(
-          new Form.Field.String(
-            "default_" + i,
-            dp.name + " \u2014 Default Project (folder mode)",
-            existing ? existing.ofDefaultProject || "" : "",
-          ),
-        );
-        projForm.addField(
-          new Form.Field.Option(
-            "depmode_" + i,
-            dp.name + " \u2014 Dependency Mode",
-            ["conservative", "optimistic"],
-            ["Conservative (add edges)", "Optimistic (drop edges)"],
-            existing
-              ? existing.dependencyMode || "conservative"
-              : "conservative",
-          ),
-        );
-        projForm.addField(
-          new Form.Field.String(
-            "estmult_" + i,
-            dp.name + " \u2014 Minutes per estimate unit",
-            existing && existing.estimateMultiplier
-              ? String(existing.estimateMultiplier)
-              : "1",
-          ),
-        );
-      }
+      const dagnyStatuses: DagnyStatus[] = await lib.getStatuses(selectedId);
+      const existingStatusMap: ProjectStatusMapping | undefined =
+        lib.getProjectStatusMap(selectedId);
 
-      await projForm.show("Project Mapping", "Next");
-
-      const newMappings: ProjectMapping[] = [];
-      for (let i = 0; i < dagnyProjects.length; i++) {
-        const dp = dagnyProjects[i];
-        const ofType: string = projForm.values["type_" + i];
-        if (ofType === "skip") continue;
-
-        const ofName: string | null = projForm.values["name_" + i] || null;
-        const ofDefaultProject: string | null =
-          projForm.values["default_" + i] || null;
-
-        if (ofType === "project" && !ofName) {
-          const err = new Alert(
-            "Missing Name",
-            "Project mapping for '" +
-              dp.name +
-              "' requires an OmniFocus project name.",
-          );
-          await err.show();
-          return;
-        }
-        if (ofType === "folder" && !ofName) {
-          const err = new Alert(
-            "Missing Name",
-            "Folder mapping for '" +
-              dp.name +
-              "' requires an OmniFocus folder name.",
-          );
-          await err.show();
-          return;
-        }
-
-        const depMode: DependencyMode =
-          projForm.values["depmode_" + i] || "conservative";
-        const estMult = parseFloat(projForm.values["estmult_" + i]) || 1;
-
-        newMappings.push({
-          dagnyProjectId: dp.id,
-          dagnyProjectName: dp.name,
-          ofType: ofType as OFTargetType,
-          ofName: ofName,
-          ofDefaultProject: ofDefaultProject,
-          dependencyMode: depMode,
-          estimateMultiplier: estMult,
-        });
-      }
-      lib.setProjectMappings(newMappings);
-
-      // ---- Step 3: Status Mapping (per project) ----
-      const allStatusMappings: ProjectStatusMapping[] = [];
-
-      for (const mapping of newMappings) {
-        const dagnyStatuses: DagnyStatus[] = await lib.getStatuses(
-          mapping.dagnyProjectId,
-        );
-        if (!dagnyStatuses || dagnyStatuses.length === 0) continue;
-
-        const existingStatusMap: ProjectStatusMapping | undefined =
-          lib.getProjectStatusMap(mapping.dagnyProjectId);
-
-        const statusForm = new Form();
-        const ofActions = ["active", "completed", "dropped"];
-        const ofLabels = ["Active", "Completed", "Dropped"];
-
+      if (dagnyStatuses && dagnyStatuses.length > 0) {
         for (let j = 0; j < dagnyStatuses.length; j++) {
           const ds = dagnyStatuses[j];
           let existingEntry: StatusMappingEntry | undefined;
@@ -193,7 +186,7 @@
           }
 
           const defaultAction = ds.isClosed ? "completed" : "active";
-          statusForm.addField(
+          settingsForm.addField(
             new Form.Field.Option(
               "action_" + j,
               ds.name + (ds.isClosed ? " (closed)" : ""),
@@ -202,7 +195,7 @@
               existingEntry ? existingEntry.ofAction : defaultAction,
             ),
           );
-          statusForm.addField(
+          settingsForm.addField(
             new Form.Field.Checkbox(
               "default_" + j,
               ds.name + " \u2014 Default for its OF action?",
@@ -210,17 +203,59 @@
             ),
           );
         }
+      }
 
-        await statusForm.show(
-          "Status Mapping: " + mapping.dagnyProjectName,
-          "Save",
+      await settingsForm.show(selectedDagny.name, "Save");
+
+      // ---- Process and save ----
+      const ofType: string = settingsForm.values["type"];
+      const ofName: string | null = settingsForm.values["name"] || null;
+      const ofDefaultProject: string | null =
+        settingsForm.values["default"] || null;
+
+      if (ofType === "project" && !ofName) {
+        const err = new Alert(
+          "Missing Name",
+          "Project mapping requires an OmniFocus project name.",
         );
+        await err.show();
+        return;
+      }
+      if (ofType === "folder" && !ofName) {
+        const err = new Alert(
+          "Missing Name",
+          "Folder mapping requires an OmniFocus folder name.",
+        );
+        await err.show();
+        return;
+      }
 
+      const depMode: DependencyMode =
+        settingsForm.values["depmode"] || "conservative";
+      const estMult = parseFloat(settingsForm.values["estmult"]) || 1;
+
+      const mapping: ProjectMapping = {
+        dagnyProjectId: selectedId,
+        dagnyProjectName: selectedDagny.name,
+        ofType: ofType as OFTargetType,
+        ofName: ofName,
+        ofDefaultProject: ofDefaultProject,
+        dependencyMode: depMode,
+        estimateMultiplier: estMult,
+      };
+
+      const updatedMappings = existingMappings.filter(
+        (m: ProjectMapping) => m.dagnyProjectId !== selectedId,
+      );
+      updatedMappings.push(mapping);
+      lib.setProjectMappings(updatedMappings);
+
+      if (dagnyStatuses && dagnyStatuses.length > 0) {
         const statusEntries: StatusMappingEntry[] = [];
         for (let j = 0; j < dagnyStatuses.length; j++) {
           const ds = dagnyStatuses[j];
-          const ofAction: OFAction = statusForm.values["action_" + j];
-          const isDefault: boolean = statusForm.values["default_" + j];
+          const ofAction: OFAction = settingsForm.values["action_" + j];
+          const isDefault: boolean = settingsForm.values["default_" + j];
           statusEntries.push({
             dagnyStatusId: ds.id,
             dagnyStatusName: ds.name,
@@ -242,19 +277,26 @@
           }
         }
 
+        const allStatusMappings: ProjectStatusMapping[] =
+          lib.getStatusMappings().filter(
+            (sm: ProjectStatusMapping) => sm.dagnyProjectId !== selectedId,
+          );
         allStatusMappings.push({
-          dagnyProjectId: mapping.dagnyProjectId,
+          dagnyProjectId: selectedId,
           mappings: statusEntries,
         });
+        lib.setStatusMappings(allStatusMappings);
       }
-      lib.setStatusMappings(allStatusMappings);
 
       const doneAlert = new Alert(
-        "Configuration Saved",
-        "Mapped " + newMappings.length + " project(s). Use Pull/Push to sync.",
+        "Mapping Saved",
+        "Saved mapping for " +
+          selectedDagny.name +
+          ". Use Pull/Push to sync.",
       );
       await doneAlert.show();
     } catch (err: any) {
+      if (err.causedByUserCancelling) return;
       const errAlert = new Alert("Configuration Error", err.message);
       await errAlert.show();
     }
