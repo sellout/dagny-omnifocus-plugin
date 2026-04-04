@@ -46,15 +46,7 @@
       }
 
       // ---- Step 2: Project Mapping ----
-      const dagnyProjects: DagnyProject[] = await lib.getProjects();
-      if (!dagnyProjects || dagnyProjects.length === 0) {
-        const noProj = new Alert(
-          "No Projects",
-          "No Dagny projects found. Create one in Dagny first.",
-        );
-        await noProj.show();
-        return;
-      }
+      const dagnyProjects: DagnyProject[] = (await lib.getProjects()) || [];
 
       const existingMappings: ProjectMapping[] = lib.getProjectMappings();
 
@@ -84,7 +76,7 @@
 
       // If the OF selection already has a mapping, default to that
       // Dagny project; otherwise default to the first project.
-      var defaultDagnyId = projIds[0];
+      var defaultDagnyId = projIds.length > 0 ? projIds[0] : "__new__";
       if (contextOfName) {
         const matchingMapping = existingMappings.find(
           (m: ProjectMapping) => m.ofName === contextOfName,
@@ -95,6 +87,9 @@
       }
 
       // ---- Step 2: Pick Dagny project ----
+      projIds.push("__new__");
+      projNames.push("Create New Project\u2026");
+
       const pickForm = new Form();
       pickForm.addField(
         new Form.Field.Option(
@@ -105,12 +100,31 @@
           defaultDagnyId,
         ),
       );
+      pickForm.addField(
+        new Form.Field.String("newName", "New Project Name", ""),
+      );
       await pickForm.show("Configure Mapping", "Next");
 
-      const selectedId: string = pickForm.values["project"];
-      const selectedDagny = dagnyProjects.find(
-        (dp: DagnyProject) => dp.id === selectedId,
-      )!;
+      var selectedId: string = pickForm.values["project"];
+      var selectedDagny: DagnyProject;
+
+      if (selectedId === "__new__") {
+        const newName: string = pickForm.values["newName"];
+        if (!newName) {
+          const err = new Alert(
+            "Missing Name",
+            "Enter a name for the new Dagny project.",
+          );
+          await err.show();
+          return;
+        }
+        selectedDagny = await lib.createProject(newName);
+        selectedId = selectedDagny.id;
+      } else {
+        selectedDagny = dagnyProjects.find(
+          (dp: DagnyProject) => dp.id === selectedId,
+        )!;
+      }
 
       // Populate from existing mapping if one exists, otherwise from
       // OF selection context.
@@ -277,8 +291,9 @@
           }
         }
 
-        const allStatusMappings: ProjectStatusMapping[] =
-          lib.getStatusMappings().filter(
+        const allStatusMappings: ProjectStatusMapping[] = lib
+          .getStatusMappings()
+          .filter(
             (sm: ProjectStatusMapping) => sm.dagnyProjectId !== selectedId,
           );
         allStatusMappings.push({
@@ -290,9 +305,7 @@
 
       const doneAlert = new Alert(
         "Mapping Saved",
-        "Saved mapping for " +
-          selectedDagny.name +
-          ". Use Pull/Push to sync.",
+        "Saved mapping for " + selectedDagny.name + ". Use Pull/Push to sync.",
       );
       await doneAlert.show();
     } catch (err: any) {

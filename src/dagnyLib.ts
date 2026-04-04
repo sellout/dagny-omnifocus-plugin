@@ -147,6 +147,10 @@
     return lib.fetch("GET", "/projects");
   };
 
+  lib.createProject = function (name: string): Promise<DagnyProject> {
+    return lib.fetch("POST", "/projects", { name: name });
+  };
+
   lib.getStatuses = function (projectId: string): Promise<DagnyStatus[]> {
     return lib.fetch("GET", "/statuses/" + projectId);
   };
