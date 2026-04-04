@@ -1,35 +1,3 @@
-class DagnyAPIError extends Error {
-  statusCode: number;
-  method: string;
-  path: string;
-  body: any;
-  context: string[];
-
-  constructor(
-    statusCode: number,
-    method: string,
-    path: string,
-    body: any,
-    responseBody: string,
-  ) {
-    super(
-      "Dagny API error: HTTP " + statusCode + " " + responseBody,
-    );
-    this.statusCode = statusCode;
-    this.method = method;
-    this.path = path;
-    this.body = body;
-    this.context = [];
-  }
-
-  withContext(detail: string): DagnyAPIError {
-    this.context.push(detail);
-    this.message =
-      this.context.join(" \u2014 ") + ": " + this.message;
-    return this;
-  }
-}
-
 (() => {
   const credentials = new Credentials();
   const preferences = new Preferences();
@@ -40,6 +8,39 @@ class DagnyAPIError extends Error {
   const PREF_STATUS_MAPPINGS = "statusMappings";
 
   const lib = new PlugIn.Library(new Version("0.1"));
+
+  class DagnyAPIError extends Error {
+    statusCode: number;
+    method: string;
+    path: string;
+    body: any;
+    context: string[];
+
+    constructor(
+      statusCode: number,
+      method: string,
+      path: string,
+      body: any,
+      responseBody: string,
+    ) {
+      super(
+        "Dagny API error: HTTP " + statusCode + " " + responseBody,
+      );
+      this.statusCode = statusCode;
+      this.method = method;
+      this.path = path;
+      this.body = body;
+      this.context = [];
+    }
+
+    withContext(detail: string): DagnyAPIError {
+      this.context.push(detail);
+      this.message =
+        this.context.join(" \u2014 ") + ": " + this.message;
+      return this;
+    }
+  }
+  lib.DagnyAPIError = DagnyAPIError;
 
   // ---- Configuration helpers ----
 

@@ -5,6 +5,7 @@
     sender: any,
   ) {
     const lib = this.plugIn.library("dagnyLib");
+    const DagnyAPIError = lib.DagnyAPIError;
 
     try {
       const mappings: ProjectMapping[] = lib.getProjectMappings();
@@ -62,6 +63,23 @@
           }
         }
 
+        async function retryWithoutStaleStatus(
+          e: InstanceType<typeof DagnyAPIError>,
+          projectId: string,
+          statusId: string | undefined,
+          retry: () => Promise<void>,
+        ): Promise<boolean> {
+          if (!statusId) return false;
+          const freshStatuses: DagnyStatus[] =
+            await lib.getStatuses(projectId);
+          const found = freshStatuses.some(
+            (s: DagnyStatus) => s.id === statusId,
+          );
+          if (found) return false;
+          await retry();
+          return true;
+        }
+
         async function processSiblings(
           siblings: Task[],
           isSequential: boolean,
@@ -101,11 +119,27 @@
                   );
                 } catch (e: any) {
                   if (e instanceof DagnyAPIError) {
-                    throw e.withContext(
-                      "Updating \u201c" + ofTask.name + "\u201d",
+                    var recovered = await retryWithoutStaleStatus(
+                      e,
+                      mapping.dagnyProjectId,
+                      patch.statusId,
+                      async function () {
+                        delete patch.statusId;
+                        await lib.updateTask(
+                          mapping.dagnyProjectId,
+                          marker!.taskId,
+                          patch,
+                        );
+                      },
                     );
+                    if (!recovered) {
+                      throw e.withContext(
+                        "Updating \u201c" + ofTask.name + "\u201d",
+                      );
+                    }
+                  } else {
+                    throw e;
                   }
-                  throw e;
                 }
                 totalUpdated++;
               }
@@ -158,11 +192,26 @@
               newId = await lib.createTask(mapping.dagnyProjectId, dagnyTask);
             } catch (e: any) {
               if (e instanceof DagnyAPIError) {
-                throw e.withContext(
-                  "Creating \u201c" + ofTask.name + "\u201d",
+                var recovered = await retryWithoutStaleStatus(
+                  e,
+                  mapping.dagnyProjectId,
+                  dagnyTask.statusId,
+                  async function () {
+                    delete dagnyTask.statusId;
+                    newId = await lib.createTask(
+                      mapping.dagnyProjectId,
+                      dagnyTask,
+                    );
+                  },
                 );
+                if (!recovered) {
+                  throw e.withContext(
+                    "Creating \u201c" + ofTask.name + "\u201d",
+                  );
+                }
+              } else {
+                throw e;
               }
-              throw e;
             }
             var taskId: string =
               typeof newId === "string"
