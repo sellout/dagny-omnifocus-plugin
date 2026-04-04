@@ -133,6 +133,20 @@
                       },
                     );
                     if (!recovered) {
+                      if (
+                        patch.statusId &&
+                        e.message.indexOf("Status transition not allowed") >= 0
+                      ) {
+                        var statusName = patch.statusId;
+                        if (projStatusMap) {
+                          var entry = projStatusMap.mappings.find(
+                            (m: StatusMappingEntry) =>
+                              m.dagnyStatusId === patch.statusId,
+                          );
+                          if (entry) statusName = entry.dagnyStatusName;
+                        }
+                        e.withContext("Setting status to \u201c" + statusName + "\u201d");
+                      }
                       throw e.withContext(
                         "Updating \u201c" + ofTask.name + "\u201d",
                       );

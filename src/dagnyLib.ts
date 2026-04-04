@@ -15,6 +15,7 @@
     path: string;
     body: any;
     context: string[];
+    originalMessage: string;
 
     constructor(
       statusCode: number,
@@ -26,6 +27,7 @@
       super(
         "Dagny API error: HTTP " + statusCode + " " + responseBody,
       );
+      this.originalMessage = this.message;
       this.statusCode = statusCode;
       this.method = method;
       this.path = path;
@@ -36,7 +38,7 @@
     withContext(detail: string): DagnyAPIError {
       this.context.push(detail);
       this.message =
-        this.context.join(" \u2014 ") + ": " + this.message;
+        this.context.join(" \u2014 ") + ": " + this.originalMessage;
       return this;
     }
   }
