@@ -93,11 +93,20 @@
                 mapping.estimateMultiplier || 1,
               );
               if (patch) {
-                await lib.updateTask(
-                  mapping.dagnyProjectId,
-                  marker.taskId,
-                  patch,
-                );
+                try {
+                  await lib.updateTask(
+                    mapping.dagnyProjectId,
+                    marker.taskId,
+                    patch,
+                  );
+                } catch (e: any) {
+                  if (e instanceof DagnyAPIError) {
+                    throw e.withContext(
+                      "Updating \u201c" + ofTask.name + "\u201d",
+                    );
+                  }
+                  throw e;
+                }
                 totalUpdated++;
               }
               if (ofTask.hasChildren) {
@@ -144,7 +153,17 @@
               ofToDagnyId,
             );
 
-            var newId = await lib.createTask(mapping.dagnyProjectId, dagnyTask);
+            var newId;
+            try {
+              newId = await lib.createTask(mapping.dagnyProjectId, dagnyTask);
+            } catch (e: any) {
+              if (e instanceof DagnyAPIError) {
+                throw e.withContext(
+                  "Creating \u201c" + ofTask.name + "\u201d",
+                );
+              }
+              throw e;
+            }
             var taskId: string =
               typeof newId === "string"
                 ? newId

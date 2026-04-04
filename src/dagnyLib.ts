@@ -1,3 +1,35 @@
+class DagnyAPIError extends Error {
+  statusCode: number;
+  method: string;
+  path: string;
+  body: any;
+  context: string[];
+
+  constructor(
+    statusCode: number,
+    method: string,
+    path: string,
+    body: any,
+    responseBody: string,
+  ) {
+    super(
+      "Dagny API error: HTTP " + statusCode + " " + responseBody,
+    );
+    this.statusCode = statusCode;
+    this.method = method;
+    this.path = path;
+    this.body = body;
+    this.context = [];
+  }
+
+  withContext(detail: string): DagnyAPIError {
+    this.context.push(detail);
+    this.message =
+      this.context.join(" \u2014 ") + ": " + this.message;
+    return this;
+  }
+}
+
 (() => {
   const credentials = new Credentials();
   const preferences = new Preferences();
@@ -123,21 +155,27 @@
       await lib.login();
       resp = await lib.buildRequest(method, path, body).fetch();
     }
-    return lib.parseResponse(resp);
+    return lib.parseResponse(resp, method, path, body);
   };
 
-  lib.parseResponse = function (resp: URL.FetchResponse): any {
+  lib.parseResponse = function (
+    resp: URL.FetchResponse,
+    method: string,
+    path: string,
+    body: any,
+  ): any {
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
       if (resp.bodyString && resp.bodyString.length > 0) {
         return JSON.parse(resp.bodyString);
       }
       return null;
     }
-    throw new Error(
-      "Dagny API error: HTTP " +
-        resp.statusCode +
-        " " +
-        (resp.bodyString || ""),
+    throw new DagnyAPIError(
+      resp.statusCode,
+      method,
+      path,
+      body,
+      resp.bodyString || "",
     );
   };
 
