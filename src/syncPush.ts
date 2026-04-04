@@ -70,6 +70,12 @@
           retry: () => Promise<void>,
         ): Promise<boolean> {
           if (!statusId) return false;
+          if (
+            e.message.indexOf("Status transition not allowed") >= 0
+          ) {
+            await retry();
+            return true;
+          }
           const freshStatuses: DagnyStatus[] =
             await lib.getStatuses(projectId);
           const found = freshStatuses.some(
