@@ -184,6 +184,14 @@
         const mode: DependencyMode = mapping.dependencyMode || "conservative";
         const tree = dagToTree(dagnyTasks, mode);
 
+        if (
+          target.type === "project" &&
+          target.container &&
+          tree.length > 1
+        ) {
+          target.container.sequential = false;
+        }
+
         const rootPosition = lib.insertionLocationForTarget(target);
 
         applyTree(
