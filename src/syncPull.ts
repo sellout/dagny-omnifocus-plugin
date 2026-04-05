@@ -181,8 +181,58 @@
           dagnyTaskMap.set(dt.taskId, dt);
         }
 
+        // Clean up spurious [OmniFocus:project/folder:] tags: if a
+        // tagged task is reachable from another tagged task's
+        // dependsOn, its tag is spurious and should be removed.
+        if (target.type !== "project") {
+          const taggedIds = new Set<string>();
+          for (const dt of dagnyTasks) {
+            if (lib.isOFContainerTask(dt)) {
+              taggedIds.add(dt.taskId);
+            }
+          }
+
+          const reachable = new Set<string>();
+          for (const dt of dagnyTasks) {
+            if (!lib.isOFContainerTask(dt)) continue;
+            const stack = dt.dependsOn.slice();
+            while (stack.length > 0) {
+              var tid = stack.pop()!;
+              if (reachable.has(tid)) continue;
+              reachable.add(tid);
+              var depTask = dagnyTaskMap.get(tid);
+              if (depTask) {
+                for (var d = 0; d < depTask.dependsOn.length; d++) {
+                  stack.push(depTask.dependsOn[d]);
+                }
+              }
+            }
+          }
+
+          for (const dt of dagnyTasks) {
+            if (!taggedIds.has(dt.taskId)) continue;
+            if (!reachable.has(dt.taskId)) continue;
+            // This tagged task is a dependency of another tagged
+            // task — remove the spurious tag.
+            const cleanDesc = dt.description.replace(
+              /\[OmniFocus:[^\]]*\]/,
+              "",
+            ).trim();
+            await lib.updateTask(
+              mapping.dagnyProjectId,
+              dt.taskId,
+              { description: cleanDesc },
+            );
+            dt.description = cleanDesc;
+          }
+        }
+
         const mode: DependencyMode = mapping.dependencyMode || "conservative";
-        const tree = dagToTree(dagnyTasks, mode);
+        const containerSequential =
+          target.type === "project" && target.container
+            ? target.container.sequential
+            : false;
+        const tree = dagToTree(dagnyTasks, mode, containerSequential);
 
         if (target.type === "project") {
           if (target.container && tree.length > 1) {

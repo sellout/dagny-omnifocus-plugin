@@ -239,6 +239,7 @@ function sortByPriority(
 function dagToTree(
   tasks: DagnyTaskWithId[],
   mode: DependencyMode,
+  containerSequential?: boolean,
 ): OFTreeNode[] {
   const dag = buildDag(tasks);
   const reduced = transitiveReduction(dag.dependsOn, dag.taskIds);
@@ -345,8 +346,9 @@ function dagToTree(
     taskMap.set(t.taskId, t);
   }
 
-  const flattened = flattenTree(result, true);
-  return sortByPriority(flattened, taskMap, true);
+  const parentSeq = containerSequential !== undefined ? containerSequential : true;
+  const flattened = flattenTree(result, parentSeq);
+  return sortByPriority(flattened, taskMap, parentSeq);
 }
 
 // Flatten sequential groups that are inside a sequential context.
