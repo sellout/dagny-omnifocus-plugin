@@ -2,7 +2,10 @@
 // Testable independently of OmniFocus or Dagny.
 // Compiled into syncPull.js via tsconfig.syncPull.json (outFile).
 
-function buildDag(tasks: DagnyTaskWithId[]): {
+function buildDag(
+  tasks: DagnyTaskWithId[],
+  excludeIds?: Set<string>,
+): {
   dependsOn: Map<string, Set<string>>;
   dependedOnBy: Map<string, Set<string>>;
   taskIds: Set<string>;
@@ -12,11 +15,7 @@ function buildDag(tasks: DagnyTaskWithId[]): {
   const taskIds = new Set<string>();
 
   for (const t of tasks) {
-    if (
-      t.description.indexOf("[OmniFocus:project:") >= 0 ||
-      t.description.indexOf("[OmniFocus:folder:") >= 0
-    )
-      continue;
+    if (excludeIds && excludeIds.has(t.taskId)) continue;
     taskIds.add(t.taskId);
     dependsOn.set(t.taskId, new Set<string>());
     dependedOnBy.set(t.taskId, new Set<string>());
@@ -240,8 +239,9 @@ function dagToTree(
   tasks: DagnyTaskWithId[],
   mode: DependencyMode,
   containerSequential?: boolean,
+  excludeIds?: Set<string>,
 ): OFTreeNode[] {
-  const dag = buildDag(tasks);
+  const dag = buildDag(tasks, excludeIds);
   const reduced = transitiveReduction(dag.dependsOn, dag.taskIds);
 
   const reducedBy = new Map<string, Set<string>>();

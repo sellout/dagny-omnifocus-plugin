@@ -295,6 +295,8 @@
           }
         }
 
+        const ofProjectMarkerIds = new Map<string, string>();
+
         async function processProject(proj: Project): Promise<void> {
           var kids = proj.task.children;
           await processSiblings(kids, proj.sequential, null);
@@ -308,6 +310,11 @@
             if (childDagnyIds.length > 0) {
               ofProjectChildren.set(proj.name, childDagnyIds);
               ofProjectSequential.set(proj.name, proj.sequential);
+            }
+            // Track Dagny marker on project task for container lookup.
+            var projMarker: DagnyMarker | null = lib.getDagnyMarker(proj.task);
+            if (projMarker && lib.markerMatchesProject(projMarker, mapping)) {
+              ofProjectMarkerIds.set(proj.name, projMarker.taskId);
             }
           }
         }
@@ -336,6 +343,7 @@
             mapping,
             ofProjectChildren,
             ofProjectSequential,
+            ofProjectMarkerIds,
             dagnyIndex,
             projStatusMap,
             lib,
@@ -563,6 +571,7 @@
     mapping: ProjectMapping,
     ofProjectChildren: Map<string, string[]>,
     ofProjectSequential: Map<string, boolean>,
+    ofProjectMarkerIds: Map<string, string>,
     dagnyIndex: Map<string, DagnyTaskWithId>,
     projStatusMap: ProjectStatusMapping | undefined,
     lib: any,
@@ -576,13 +585,18 @@
           ? [childIds[childIds.length - 1]]
           : childIds;
 
-      const ofTag = "[OmniFocus:project:" + projName + "]";
-
+      // Find existing container task: first by marker, then by name.
       let existingProjectTask: DagnyTaskWithId | null = null;
-      for (const [id, dt] of dagnyIndex) {
-        if (lib.getOFProjectName(dt) === projName) {
-          existingProjectTask = dt;
-          break;
+      const markerTaskId = ofProjectMarkerIds.get(projName);
+      if (markerTaskId) {
+        existingProjectTask = dagnyIndex.get(markerTaskId) || null;
+      }
+      if (!existingProjectTask) {
+        for (const [id, dt] of dagnyIndex) {
+          if (dt.title === projName) {
+            existingProjectTask = dt;
+            break;
+          }
         }
       }
 
@@ -590,13 +604,7 @@
         await lib.updateTask(
           mapping.dagnyProjectId,
           existingProjectTask.taskId,
-          {
-            dependsOn: deps,
-            description: lib.setOFDescriptionTag(
-              existingProjectTask.description,
-              ofTag,
-            ),
-          },
+          { dependsOn: deps },
         );
         projectDagnyIds.set(projName, existingProjectTask.taskId);
       } else {
@@ -608,7 +616,7 @@
 
         const projectTask: DagnyTaskCreate = {
           title: projName,
-          description: ofTag,
+          description: "",
           dependsOn: deps,
           tags: [],
           estimate: 1,
@@ -663,11 +671,9 @@
 
       if (deps.length === 0) continue;
 
-      const ofTag = "[OmniFocus:folder:" + folder.name + "]";
-
       let existingFolderTask: DagnyTaskWithId | null = null;
       for (const [id, dt] of dagnyIndex) {
-        if (lib.getOFFolderName(dt) === folder.name) {
+        if (dt.title === folder.name) {
           existingFolderTask = dt;
           break;
         }
@@ -677,13 +683,7 @@
         await lib.updateTask(
           mapping.dagnyProjectId,
           existingFolderTask.taskId,
-          {
-            dependsOn: deps,
-            description: lib.setOFDescriptionTag(
-              existingFolderTask.description,
-              ofTag,
-            ),
-          },
+          { dependsOn: deps },
         );
         folderDagnyIds.set(folder.name, existingFolderTask.taskId);
       } else {
@@ -695,7 +695,7 @@
 
         const folderTask: DagnyTaskCreate = {
           title: folder.name,
-          description: ofTag,
+          description: "",
           dependsOn: deps,
           tags: [],
           estimate: 1,

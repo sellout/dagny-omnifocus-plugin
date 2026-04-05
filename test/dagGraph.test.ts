@@ -67,12 +67,9 @@ describe("buildDag", () => {
     expect(dag.dependedOnBy.get("A")).toEqual(new Set(["B", "C"]));
   });
 
-  it("filters out [OmniFocus:project:] tasks", () => {
-    const tasks = [
-      makeTask("A"),
-      { ...makeTask("P"), description: "[OmniFocus:project:Foo]" },
-    ];
-    const dag = buildDag(tasks);
+  it("filters out tasks by excludeIds", () => {
+    const tasks = [makeTask("A"), makeTask("P")];
+    const dag = buildDag(tasks, new Set(["P"]));
     expect(dag.taskIds).toEqual(new Set(["A"]));
   });
 
@@ -280,12 +277,9 @@ describe("dagToTree", () => {
     expect(totalDChildren).toBe(1);
   });
 
-  it("filters out [OmniFocus:project:] placeholders", () => {
-    const tasks = [
-      makeTask("A"),
-      { ...makeTask("P", ["A"]), description: "[OmniFocus:project:Foo]" },
-    ];
-    const tree = dagToTree(tasks, "conservative");
+  it("filters out tasks by excludeIds", () => {
+    const tasks = [makeTask("A"), makeTask("P", ["A"])];
+    const tree = dagToTree(tasks, "conservative", undefined, new Set(["P"]));
     expect(tree).toHaveLength(1);
     expect(tree[0].dagnyTaskId).toBe("A");
   });

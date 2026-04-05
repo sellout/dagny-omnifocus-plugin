@@ -181,49 +181,64 @@
           dagnyTaskMap.set(dt.taskId, dt);
         }
 
-        // Clean up spurious [OmniFocus:project/folder:] tags: if a
-        // tagged task is reachable from another tagged task's
-        // dependsOn, its tag is spurious and should be removed.
+        // Build set of container task IDs to exclude from the tree.
+        // Projects: identified by Dagny markers on OF project .task.
+        // Folders: matched by name against OF folders.
+        const containerIds = new Set<string>();
+        const containerProjectMap = new Map<string, string>();
+        const containerFolderMap = new Map<string, string>();
+        var ofFolders: Folder[] = [];
+
         if (target.type !== "project") {
-          const taggedIds = new Set<string>();
-          for (const dt of dagnyTasks) {
-            if (lib.isOFContainerTask(dt)) {
-              taggedIds.add(dt.taskId);
+          const ofProjects: Project[] =
+            target.type === "folder" && target.folder
+              ? target.folder.flattenedProjects
+              : (flattenedProjects as Project[]);
+          for (const proj of ofProjects) {
+            const marker: DagnyMarker | null = lib.getDagnyMarker(proj.task);
+            if (marker && lib.markerMatchesProject(marker, mapping)) {
+              containerIds.add(marker.taskId);
+              containerProjectMap.set(marker.taskId, proj.name);
             }
           }
 
-          const reachable = new Set<string>();
-          for (const dt of dagnyTasks) {
-            if (!lib.isOFContainerTask(dt)) continue;
-            const stack = dt.dependsOn.slice();
-            while (stack.length > 0) {
-              var tid = stack.pop()!;
-              if (reachable.has(tid)) continue;
-              reachable.add(tid);
-              var depTask = dagnyTaskMap.get(tid);
-              if (depTask) {
-                for (var d = 0; d < depTask.dependsOn.length; d++) {
-                  stack.push(depTask.dependsOn[d]);
-                }
+          ofFolders =
+            target.type === "folder" && target.folder
+              ? (target.folder.flattenedFolders as Folder[])
+              : (flattenedFolders as Folder[]);
+          for (const folder of ofFolders) {
+            for (const dt of dagnyTasks) {
+              if (dt.title === folder.name && !containerIds.has(dt.taskId)) {
+                containerIds.add(dt.taskId);
+                containerFolderMap.set(dt.taskId, folder.name);
               }
             }
           }
 
+          // Also detect legacy [OmniFocus:] description tags and
+          // clean them up while adding to containerIds.
           for (const dt of dagnyTasks) {
-            if (!taggedIds.has(dt.taskId)) continue;
-            if (!reachable.has(dt.taskId)) continue;
-            // This tagged task is a dependency of another tagged
-            // task — remove the spurious tag.
-            const cleanDesc = dt.description.replace(
-              /\[OmniFocus:[^\]]*\]/,
-              "",
-            ).trim();
-            await lib.updateTask(
-              mapping.dagnyProjectId,
-              dt.taskId,
-              { description: cleanDesc },
-            );
-            dt.description = cleanDesc;
+            if (lib.isOFContainerTask(dt)) {
+              containerIds.add(dt.taskId);
+              if (lib.isOFProjectTask(dt)) {
+                const projName = lib.getOFProjectName(dt);
+                if (projName) {
+                  containerProjectMap.set(dt.taskId, projName);
+                }
+              }
+              // Remove legacy tag from Dagny.
+              const cleanDesc = dt.description
+                .replace(/\[OmniFocus:[^\]]*\]/, "")
+                .trim();
+              if (cleanDesc !== dt.description) {
+                await lib.updateTask(
+                  mapping.dagnyProjectId,
+                  dt.taskId,
+                  { description: cleanDesc },
+                );
+                dt.description = cleanDesc;
+              }
+            }
           }
         }
 
@@ -232,7 +247,12 @@
           target.type === "project" && target.container
             ? target.container.sequential
             : false;
-        const tree = dagToTree(dagnyTasks, mode, containerSequential);
+        const tree = dagToTree(
+          dagnyTasks,
+          mode,
+          containerSequential,
+          containerIds,
+        );
 
         if (target.type === "project") {
           if (target.container && tree.length > 1) {
@@ -255,10 +275,10 @@
         } else {
           // folder / everything: roots must go into OF projects.
 
-          // Map dagnyTaskId → OF project name from [OmniFocus:project:] tasks.
+          // Map dagnyTaskId → OF project name from container tasks.
           const rootToProject = new Map<string, string>();
           for (const dt of dagnyTasks) {
-            const projName: string | null = lib.getOFProjectName(dt);
+            const projName = containerProjectMap.get(dt.taskId);
             if (!projName) continue;
             for (const depId of dt.dependsOn) {
               rootToProject.set(depId, projName);
@@ -282,8 +302,23 @@
             }
           }
 
-          // Position for creating new projects.
-          const newProjectPosition =
+          // Map project name → parent folder name, by checking which
+          // folder container task has the project container in its
+          // dependsOn.
+          const projectParentFolder = new Map<string, string>();
+          for (const dt of dagnyTasks) {
+            const folderName = containerFolderMap.get(dt.taskId);
+            if (!folderName) continue;
+            for (const depId of dt.dependsOn) {
+              const projName = containerProjectMap.get(depId);
+              if (projName) {
+                projectParentFolder.set(projName, folderName);
+              }
+            }
+          }
+
+          // Default position for creating new projects.
+          const defaultProjectPosition =
             target.type === "folder" && target.folder
               ? target.folder.ending
               : undefined;
@@ -300,11 +335,29 @@
             return null;
           }
 
+          // Helper to find an existing OF folder by name.
+          function findOFFolder(name: string): Folder | null {
+            for (var f = 0; f < ofFolders.length; f++) {
+              if (ofFolders[f].name === name) return ofFolders[f];
+            }
+            return null;
+          }
+
+          // Position for creating a project, respecting folder nesting.
+          function projectPosition(projName: string): any {
+            const parentName = projectParentFolder.get(projName);
+            if (parentName) {
+              const parentFolder = findOFFolder(parentName);
+              if (parentFolder) return parentFolder.ending;
+            }
+            return defaultProjectPosition;
+          }
+
           // Apply claimed roots to their OF projects.
           for (const [projName, roots] of projectGroups) {
             var ofProj: Project =
               findOFProject(projName) ||
-              new Project(projName, newProjectPosition);
+              new Project(projName, projectPosition(projName));
             if (roots.length > 1) {
               ofProj.sequential = false;
             }
@@ -328,7 +381,7 @@
             const dt = dagnyTaskMap.get(root.dagnyTaskId);
             if (!dt) continue;
 
-            var ofProj: Project = new Project(dt.title, newProjectPosition);
+            var ofProj: Project = new Project(dt.title, projectPosition(dt.title));
             ofProj.sequential = root.sequential;
             lib.setDagnyMarker(ofProj.task, mapping.dagnyProjectId, dt.taskId);
             existingIndex.set(dt.taskId, ofProj.task);
@@ -343,15 +396,6 @@
               lib,
             );
             counters.created++;
-
-            // Tag the Dagny task so subsequent syncs treat it as
-            // a project representative.
-            await lib.updateTask(mapping.dagnyProjectId, dt.taskId, {
-              description: lib.setOFDescriptionTag(
-                dt.description,
-                "[OmniFocus:project:" + dt.title + "]",
-              ),
-            });
 
             if (root.children.length > 0) {
               var flatChildren = flattenTree(
