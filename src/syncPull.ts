@@ -205,11 +205,11 @@
         } else {
           // folder / everything: roots must go into OF projects.
 
-          // Map dagnyTaskId → OF project name from [OF Project] tasks.
+          // Map dagnyTaskId → OF project name from [OmniFocus:project:] tasks.
           const rootToProject = new Map<string, string>();
           for (const dt of dagnyTasks) {
-            if (!dt.title.startsWith("[OF Project] ")) continue;
-            const projName = dt.title.substring("[OF Project] ".length);
+            const projName: string | null = lib.getOFProjectName(dt);
+            if (!projName) continue;
             for (const depId of dt.dependsOn) {
               rootToProject.set(depId, projName);
             }
@@ -292,6 +292,15 @@
               lib,
             );
             counters.created++;
+
+            // Tag the Dagny task so subsequent syncs treat it as
+            // a project representative.
+            await lib.updateTask(mapping.dagnyProjectId, dt.taskId, {
+              description: lib.setOFDescriptionTag(
+                dt.description,
+                "[OmniFocus:project:" + dt.title + "]",
+              ),
+            });
 
             if (root.children.length > 0) {
               applyTree(

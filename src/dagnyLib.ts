@@ -529,5 +529,44 @@
     credentials.remove(SERVICE_NAME);
   };
 
+  // ---- OF container description tags ----
+
+  const ofTagPattern = /\[OmniFocus:[^\]]*\]/;
+
+  lib.isOFProjectTask = function (dt: DagnyTaskWithId): boolean {
+    return dt.description.indexOf("[OmniFocus:project:") >= 0;
+  };
+
+  lib.isOFFolderTask = function (dt: DagnyTaskWithId): boolean {
+    return dt.description.indexOf("[OmniFocus:folder:") >= 0;
+  };
+
+  lib.isOFContainerTask = function (dt: DagnyTaskWithId): boolean {
+    return lib.isOFProjectTask(dt) || lib.isOFFolderTask(dt);
+  };
+
+  lib.getOFProjectName = function (dt: DagnyTaskWithId): string | null {
+    const match = dt.description.match(/\[OmniFocus:project:([^\]]*)\]/);
+    return match ? match[1] : null;
+  };
+
+  lib.getOFFolderName = function (dt: DagnyTaskWithId): string | null {
+    const match = dt.description.match(/\[OmniFocus:folder:([^\]]*)\]/);
+    return match ? match[1] : null;
+  };
+
+  lib.setOFDescriptionTag = function (
+    description: string,
+    tag: string,
+  ): string {
+    if (ofTagPattern.test(description)) {
+      return description.replace(ofTagPattern, tag);
+    }
+    if (description.length > 0) {
+      return description + "\n" + tag;
+    }
+    return tag;
+  };
+
   return lib;
 })();

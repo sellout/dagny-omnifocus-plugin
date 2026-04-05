@@ -13,8 +13,8 @@ function buildDag(tasks: DagnyTaskWithId[]): {
 
   for (const t of tasks) {
     if (
-      t.title.startsWith("[OF Project] ") ||
-      t.title.startsWith("[OF Folder] ")
+      t.description.indexOf("[OmniFocus:project:") >= 0 ||
+      t.description.indexOf("[OmniFocus:folder:") >= 0
     )
       continue;
     taskIds.add(t.taskId);

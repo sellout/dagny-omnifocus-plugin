@@ -569,7 +569,6 @@
   ): Promise<Map<string, string>> {
     const projectDagnyIds = new Map<string, string>();
     for (const [projName, childIds] of ofProjectChildren) {
-      const dagnyTitle = "[OF Project] " + projName;
       const isSequential = ofProjectSequential.get(projName) || false;
 
       const deps =
@@ -577,9 +576,11 @@
           ? [childIds[childIds.length - 1]]
           : childIds;
 
+      const ofTag = "[OmniFocus:project:" + projName + "]";
+
       let existingProjectTask: DagnyTaskWithId | null = null;
       for (const [id, dt] of dagnyIndex) {
-        if (dt.title === dagnyTitle) {
+        if (lib.getOFProjectName(dt) === projName) {
           existingProjectTask = dt;
           break;
         }
@@ -589,7 +590,13 @@
         await lib.updateTask(
           mapping.dagnyProjectId,
           existingProjectTask.taskId,
-          { dependsOn: deps },
+          {
+            dependsOn: deps,
+            description: lib.setOFDescriptionTag(
+              existingProjectTask.description,
+              ofTag,
+            ),
+          },
         );
         projectDagnyIds.set(projName, existingProjectTask.taskId);
       } else {
@@ -600,8 +607,8 @@
           : undefined;
 
         const projectTask: DagnyTaskCreate = {
-          title: dagnyTitle,
-          description: "Represents OmniFocus project: " + projName,
+          title: projName,
+          description: ofTag,
           dependsOn: deps,
           tags: [],
           estimate: 1,
@@ -643,7 +650,6 @@
     const folderDagnyIds = new Map<string, string>();
 
     for (const folder of sorted) {
-      const dagnyTitle = "[OF Folder] " + folder.name;
       const deps: string[] = [];
 
       for (const proj of folder.projects) {
@@ -657,9 +663,11 @@
 
       if (deps.length === 0) continue;
 
+      const ofTag = "[OmniFocus:folder:" + folder.name + "]";
+
       let existingFolderTask: DagnyTaskWithId | null = null;
       for (const [id, dt] of dagnyIndex) {
-        if (dt.title === dagnyTitle) {
+        if (lib.getOFFolderName(dt) === folder.name) {
           existingFolderTask = dt;
           break;
         }
@@ -669,7 +677,13 @@
         await lib.updateTask(
           mapping.dagnyProjectId,
           existingFolderTask.taskId,
-          { dependsOn: deps },
+          {
+            dependsOn: deps,
+            description: lib.setOFDescriptionTag(
+              existingFolderTask.description,
+              ofTag,
+            ),
+          },
         );
         folderDagnyIds.set(folder.name, existingFolderTask.taskId);
       } else {
@@ -680,8 +694,8 @@
           : undefined;
 
         const folderTask: DagnyTaskCreate = {
-          title: dagnyTitle,
-          description: "Represents OmniFocus folder: " + folder.name,
+          title: folder.name,
+          description: ofTag,
           dependsOn: deps,
           tags: [],
           estimate: 1,

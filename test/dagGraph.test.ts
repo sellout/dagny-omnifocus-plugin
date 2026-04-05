@@ -67,10 +67,10 @@ describe("buildDag", () => {
     expect(dag.dependedOnBy.get("A")).toEqual(new Set(["B", "C"]));
   });
 
-  it("filters out [OF Project] tasks", () => {
+  it("filters out [OmniFocus:project:] tasks", () => {
     const tasks = [
       makeTask("A"),
-      { ...makeTask("P"), title: "[OF Project] Foo" },
+      { ...makeTask("P"), description: "[OmniFocus:project:Foo]" },
     ];
     const dag = buildDag(tasks);
     expect(dag.taskIds).toEqual(new Set(["A"]));
@@ -280,10 +280,10 @@ describe("dagToTree", () => {
     expect(totalDChildren).toBe(1);
   });
 
-  it("filters out [OF Project] placeholders", () => {
+  it("filters out [OmniFocus:project:] placeholders", () => {
     const tasks = [
       makeTask("A"),
-      { ...makeTask("P", ["A"]), title: "[OF Project] Foo" },
+      { ...makeTask("P", ["A"]), description: "[OmniFocus:project:Foo]" },
     ];
     const tree = dagToTree(tasks, "conservative");
     expect(tree).toHaveLength(1);
