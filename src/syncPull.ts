@@ -308,8 +308,9 @@
             if (roots.length > 1) {
               ofProj.sequential = false;
             }
+            var flatRoots = flattenTree(roots, ofProj.sequential);
             applyTree(
-              roots,
+              flatRoots,
               ofProj.ending,
               dagnyTaskMap,
               existingIndex,
@@ -353,8 +354,12 @@
             });
 
             if (root.children.length > 0) {
-              applyTree(
+              var flatChildren = flattenTree(
                 root.children,
+                root.sequential,
+              );
+              applyTree(
+                flatChildren,
                 ofProj.ending,
                 dagnyTaskMap,
                 existingIndex,
