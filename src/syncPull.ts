@@ -231,11 +231,9 @@
                 .replace(/\[OmniFocus:[^\]]*\]/, "")
                 .trim();
               if (cleanDesc !== dt.description) {
-                await lib.updateTask(
-                  mapping.dagnyProjectId,
-                  dt.taskId,
-                  { description: cleanDesc },
-                );
+                await lib.updateTask(mapping.dagnyProjectId, dt.taskId, {
+                  description: cleanDesc,
+                });
                 dt.description = cleanDesc;
               }
             }
@@ -381,7 +379,10 @@
             const dt = dagnyTaskMap.get(root.dagnyTaskId);
             if (!dt) continue;
 
-            var ofProj: Project = new Project(dt.title, projectPosition(dt.title));
+            var ofProj: Project = new Project(
+              dt.title,
+              projectPosition(dt.title),
+            );
             ofProj.sequential = root.sequential;
             lib.setDagnyMarker(ofProj.task, mapping.dagnyProjectId, dt.taskId);
             existingIndex.set(dt.taskId, ofProj.task);
@@ -398,10 +399,7 @@
             counters.created++;
 
             if (root.children.length > 0) {
-              var flatChildren = flattenTree(
-                root.children,
-                root.sequential,
-              );
+              var flatChildren = flattenTree(root.children, root.sequential);
               applyTree(
                 flatChildren,
                 ofProj.ending,

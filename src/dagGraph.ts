@@ -346,7 +346,8 @@ function dagToTree(
     taskMap.set(t.taskId, t);
   }
 
-  const parentSeq = containerSequential !== undefined ? containerSequential : true;
+  const parentSeq =
+    containerSequential !== undefined ? containerSequential : true;
   const flattened = flattenTree(result, parentSeq);
   return sortByPriority(flattened, taskMap, parentSeq);
 }

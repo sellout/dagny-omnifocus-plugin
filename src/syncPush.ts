@@ -70,14 +70,11 @@
           retry: () => Promise<void>,
         ): Promise<boolean> {
           if (!statusId) return false;
-          if (
-            e.message.indexOf("Status transition not allowed") >= 0
-          ) {
+          if (e.message.indexOf("Status transition not allowed") >= 0) {
             await retry();
             return true;
           }
-          const freshStatuses: DagnyStatus[] =
-            await lib.getStatuses(projectId);
+          const freshStatuses: DagnyStatus[] = await lib.getStatuses(projectId);
           const found = freshStatuses.some(
             (s: DagnyStatus) => s.id === statusId,
           );
@@ -151,7 +148,9 @@
                           );
                           if (entry) statusName = entry.dagnyStatusName;
                         }
-                        e.withContext("Setting status to \u201c" + statusName + "\u201d");
+                        e.withContext(
+                          "Setting status to \u201c" + statusName + "\u201d",
+                        );
                       }
                       throw e.withContext(
                         "Updating \u201c" + ofTask.name + "\u201d",

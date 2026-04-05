@@ -24,9 +24,7 @@
       body: any,
       responseBody: string,
     ) {
-      super(
-        "Dagny API error: HTTP " + statusCode + " " + responseBody,
-      );
+      super("Dagny API error: HTTP " + statusCode + " " + responseBody);
       this.originalMessage = this.message;
       this.statusCode = statusCode;
       this.method = method;
