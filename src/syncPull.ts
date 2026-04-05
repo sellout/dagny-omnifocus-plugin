@@ -184,28 +184,131 @@
         const mode: DependencyMode = mapping.dependencyMode || "conservative";
         const tree = dagToTree(dagnyTasks, mode);
 
-        if (
-          target.type === "project" &&
-          target.container &&
-          tree.length > 1
-        ) {
-          target.container.sequential = false;
+        if (target.type === "project") {
+          if (target.container && tree.length > 1) {
+            target.container.sequential = false;
+          }
+
+          const rootPosition = lib.insertionLocationForTarget(target);
+          applyTree(
+            tree,
+            rootPosition,
+            dagnyTaskMap,
+            existingIndex,
+            mapping,
+            projStatusMap,
+            memberMap,
+            myUserId,
+            lib,
+            counters,
+          );
+        } else {
+          // folder / everything: roots must go into OF projects.
+
+          // Map dagnyTaskId → OF project name from [OF Project] tasks.
+          const rootToProject = new Map<string, string>();
+          for (const dt of dagnyTasks) {
+            if (!dt.title.startsWith("[OF Project] ")) continue;
+            const projName = dt.title.substring("[OF Project] ".length);
+            for (const depId of dt.dependsOn) {
+              rootToProject.set(depId, projName);
+            }
+          }
+
+          // Group roots by their OF project name.
+          const projectGroups = new Map<string, OFTreeNode[]>();
+          const unclaimed: OFTreeNode[] = [];
+          for (const root of tree) {
+            const projName = rootToProject.get(root.dagnyTaskId);
+            if (projName) {
+              var group = projectGroups.get(projName);
+              if (!group) {
+                group = [];
+                projectGroups.set(projName, group);
+              }
+              group.push(root);
+            } else {
+              unclaimed.push(root);
+            }
+          }
+
+          // Position for creating new projects.
+          const newProjectPosition =
+            target.type === "folder" && target.folder
+              ? target.folder.ending
+              : undefined;
+
+          // Helper to find an existing OF project by name.
+          function findOFProject(name: string): Project | null {
+            const projects: Project[] =
+              target.type === "folder" && target.folder
+                ? target.folder.flattenedProjects
+                : (flattenedProjects as Project[]);
+            for (var p = 0; p < projects.length; p++) {
+              if (projects[p].name === name) return projects[p];
+            }
+            return null;
+          }
+
+          // Apply claimed roots to their OF projects.
+          for (const [projName, roots] of projectGroups) {
+            var ofProj: Project =
+              findOFProject(projName) ||
+              new Project(projName, newProjectPosition);
+            if (roots.length > 1) {
+              ofProj.sequential = false;
+            }
+            applyTree(
+              roots,
+              ofProj.ending,
+              dagnyTaskMap,
+              existingIndex,
+              mapping,
+              projStatusMap,
+              memberMap,
+              myUserId,
+              lib,
+              counters,
+            );
+          }
+
+          // Create new OF projects for unclaimed roots.
+          for (const root of unclaimed) {
+            const dt = dagnyTaskMap.get(root.dagnyTaskId);
+            if (!dt) continue;
+
+            var ofProj: Project = new Project(dt.title, newProjectPosition);
+            ofProj.sequential = root.sequential;
+            lib.setDagnyMarker(ofProj.task, mapping.dagnyProjectId, dt.taskId);
+            existingIndex.set(dt.taskId, ofProj.task);
+
+            updateTaskFields(
+              ofProj.task,
+              dt,
+              mapping,
+              projStatusMap,
+              memberMap,
+              myUserId,
+              lib,
+            );
+            counters.created++;
+
+            if (root.children.length > 0) {
+              applyTree(
+                root.children,
+                ofProj.ending,
+                dagnyTaskMap,
+                existingIndex,
+                mapping,
+                projStatusMap,
+                memberMap,
+                myUserId,
+                lib,
+                counters,
+              );
+            }
+          }
         }
-
-        const rootPosition = lib.insertionLocationForTarget(target);
-
-        applyTree(
-          tree,
-          rootPosition,
-          dagnyTaskMap,
-          existingIndex,
-          mapping,
-          projStatusMap,
-          memberMap,
-          myUserId,
-          lib,
-          counters,
-        );
       }
 
       const summary = new Alert(
