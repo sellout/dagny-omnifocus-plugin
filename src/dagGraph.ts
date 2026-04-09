@@ -267,7 +267,12 @@ function dagToTree(
     });
 
     if (deps.length === 0) {
-      return { dagnyTaskId: taskId, sequential: false, children: [], noFlatten: nf };
+      return {
+        dagnyTaskId: taskId,
+        sequential: false,
+        children: [],
+        noFlatten: nf,
+      };
     }
 
     const chain = findChain(deps, reduced);
@@ -279,7 +284,12 @@ function dagToTree(
           childNodes.push(buildSubtree(depId));
         }
       }
-      return { dagnyTaskId: taskId, sequential: true, children: childNodes, noFlatten: nf };
+      return {
+        dagnyTaskId: taskId,
+        sequential: true,
+        children: childNodes,
+        noFlatten: nf,
+      };
     } else if (areIndependent(deps, reduced)) {
       const childNodes: OFTreeNode[] = [];
       for (const depId of deps) {
@@ -294,7 +304,8 @@ function dagToTree(
         noFlatten: nf,
       };
     } else {
-      const useConservative = mode === "conservative" || (noFlattenIds && noFlattenIds.has(taskId));
+      const useConservative =
+        mode === "conservative" || (noFlattenIds && noFlattenIds.has(taskId));
       const sorted = topologicalSort(deps, reduced);
       const childNodes: OFTreeNode[] = [];
       for (const depId of sorted) {
@@ -382,7 +393,12 @@ function flattenTree(
     // First, recursively flatten children
     const flatChildren = flattenTree(node.children, node.sequential);
 
-    if (parentSequential && node.sequential && flatChildren.length > 0 && !node.noFlatten) {
+    if (
+      parentSequential &&
+      node.sequential &&
+      flatChildren.length > 0 &&
+      !node.noFlatten
+    ) {
       // Flatten: hoist children before this node, make this node a leaf
       for (const child of flatChildren) {
         result.push(child);
@@ -435,7 +451,10 @@ function filterTasksForTeam(
   for (const t of tasks) {
     if (t.assigneeId === teamUserId) {
       mine.add(t.taskId);
-    } else if (includeUnassigned && (t.assigneeId === null || t.assigneeId === undefined)) {
+    } else if (
+      includeUnassigned &&
+      (t.assigneeId === null || t.assigneeId === undefined)
+    ) {
       mine.add(t.taskId);
     }
   }

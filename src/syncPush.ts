@@ -490,7 +490,12 @@
       patch.statusId = dagnyStatusId;
     }
 
-    patch.tags = collectDagnyTags(ofTask, lib, usernameToId, mapping.tagPrefix || null);
+    patch.tags = collectDagnyTags(
+      ofTask,
+      lib,
+      usernameToId,
+      mapping.tagPrefix || null,
+    );
 
     if (ofTask.estimatedMinutes != null) {
       patch.estimate = Math.round(ofTask.estimatedMinutes / estimateMultiplier);
@@ -535,7 +540,12 @@
       title: ofTask.name,
       description: ofTask.note || "",
       dependsOn: [],
-      tags: collectDagnyTags(ofTask, lib, usernameToId, mapping.tagPrefix || null),
+      tags: collectDagnyTags(
+        ofTask,
+        lib,
+        usernameToId,
+        mapping.tagPrefix || null,
+      ),
       estimate: Math.round((ofTask.estimatedMinutes || 1) / estimateMultiplier),
       value: ofTask.flagged ? 1 : null,
     };
@@ -550,10 +560,19 @@
 
     if (mapping.teamUserId && mapping.newTaskAssignment === "user") {
       dagnyTask.assigneeId = mapping.teamUserId;
-    } else if (mapping.teamUserId && mapping.newTaskAssignment === "unassigned") {
+    } else if (
+      mapping.teamUserId &&
+      mapping.newTaskAssignment === "unassigned"
+    ) {
       // Leave assigneeId unset (null)
     } else {
-      const assignee = resolveAssignee(ofTask, null, lib, usernameToId, myUserId);
+      const assignee = resolveAssignee(
+        ofTask,
+        null,
+        lib,
+        usernameToId,
+        myUserId,
+      );
       if (assignee !== undefined && assignee !== null) {
         dagnyTask.assigneeId = assignee;
       }

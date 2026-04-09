@@ -536,10 +536,7 @@ describe("filterTasksForTeam", () => {
   });
 
   it("excludes unassigned when includeUnassigned is false", () => {
-    const tasks = [
-      makeTask("A", [], "user1"),
-      makeTask("B", [], null),
-    ];
+    const tasks = [makeTask("A", [], "user1"), makeTask("B", [], null)];
     const result = filterTasksForTeam(tasks, "user1", false);
     expect(result.categories.get("A")).toBe("mine");
     expect(result.categories.has("B")).toBe(false);
@@ -603,10 +600,7 @@ describe("filterTasksForTeam", () => {
 
   it("includes unassigned blockers even when includeUnassigned is false", () => {
     // A(mine) depends on B(unassigned)
-    const tasks = [
-      makeTask("A", ["B"], "user1"),
-      makeTask("B", [], null),
-    ];
+    const tasks = [makeTask("A", ["B"], "user1"), makeTask("B", [], null)];
     const result = filterTasksForTeam(tasks, "user1", false);
     expect(result.categories.get("A")).toBe("mine");
     expect(result.categories.get("B")).toBe("blocker");

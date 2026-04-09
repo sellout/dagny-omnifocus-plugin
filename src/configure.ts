@@ -306,9 +306,11 @@
       const teamUserId: string | null =
         teamUserRaw && teamUserRaw !== "__none__" ? teamUserRaw : null;
       const teamUsername: string | null = teamUserId
-        ? (members.find(
-            (m: ProjectMember) => m.userId === teamUserId,
-          ) || { username: null }).username
+        ? (
+            members.find((m: ProjectMember) => m.userId === teamUserId) || {
+              username: null,
+            }
+          ).username
         : null;
 
       const mapping: ProjectMapping = {

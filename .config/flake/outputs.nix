@@ -98,7 +98,7 @@ in
           src = pkgs.lib.cleanSource ../..;
           npmDeps = pkgs.fetchNpmDeps {
             src = pkgs.lib.cleanSource ../..;
-            hash = "sha256-sd0HCYZ/aDyGN8PCMc6m4maxBVPkXiDWDKotgW7bbXQ=";
+            hash = "sha256-9w/2E8n4j38deHEnT1jPFnJ4OiApfXPNrivUqhktYno=";
           };
           nativeBuildInputs = [
             pkgs.nodejs
