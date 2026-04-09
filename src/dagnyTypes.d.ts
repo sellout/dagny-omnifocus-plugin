@@ -83,6 +83,10 @@ interface ProjectMapping {
   ofDefaultProject: string | null;
   dependencyMode?: DependencyMode;
   estimateMultiplier?: number; // minutes per Dagny estimate unit
+  teamUserId?: string | null;
+  teamUsername?: string | null;
+  includeUnassigned?: boolean;
+  newTaskAssignment?: "user" | "unassigned";
 }
 
 // Tree structure computed from Dagny's dependency DAG,
@@ -91,7 +95,10 @@ interface OFTreeNode {
   dagnyTaskId: string;
   sequential: boolean;
   children: OFTreeNode[];
+  noFlatten?: boolean;
 }
+
+type TaskCategory = "mine" | "blocker" | "blocked";
 
 interface StatusMappingEntry {
   dagnyStatusId: string;

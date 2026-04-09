@@ -195,6 +195,7 @@
               usernameToId,
               myUserId,
               mapping.estimateMultiplier || 1,
+              mapping,
             );
 
             dagnyTask.dependsOn = computeDependencies(
@@ -526,6 +527,7 @@
     usernameToId: Map<string, string>,
     myUserId: string,
     estimateMultiplier: number,
+    mapping: ProjectMapping,
   ): DagnyTaskCreate {
     const dagnyTask: DagnyTaskCreate = {
       title: ofTask.name,
@@ -544,9 +546,15 @@
       dagnyTask.statusId = dagnyStatusId;
     }
 
-    const assignee = resolveAssignee(ofTask, null, lib, usernameToId, myUserId);
-    if (assignee !== undefined && assignee !== null) {
-      dagnyTask.assigneeId = assignee;
+    if (mapping.teamUserId && mapping.newTaskAssignment === "user") {
+      dagnyTask.assigneeId = mapping.teamUserId;
+    } else if (mapping.teamUserId && mapping.newTaskAssignment === "unassigned") {
+      // Leave assigneeId unset (null)
+    } else {
+      const assignee = resolveAssignee(ofTask, null, lib, usernameToId, myUserId);
+      if (assignee !== undefined && assignee !== null) {
+        dagnyTask.assigneeId = assignee;
+      }
     }
 
     return dagnyTask;

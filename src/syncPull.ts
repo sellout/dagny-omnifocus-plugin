@@ -16,6 +16,7 @@
     myUserId: string,
     lib: any,
     counters: { created: number; updated: number },
+    taskCategories: Map<string, TaskCategory> | null,
   ): void {
     for (var i = 0; i < nodes.length; i++) {
       const node = nodes[i];
@@ -34,6 +35,10 @@
         counters.updated++;
       }
 
+      const category = taskCategories
+        ? taskCategories.get(node.dagnyTaskId) || null
+        : null;
+
       updateTaskFields(
         ofTask!,
         dt,
@@ -42,10 +47,14 @@
         memberMap,
         myUserId,
         lib,
+        category,
       );
 
       if (node.children.length > 0) {
         ofTask!.sequential = node.sequential;
+        if (category === "blocked") {
+          ofTask!.completedByChildren = true;
+        }
         applyTree(
           node.children,
           ofTask!.ending,
@@ -57,6 +66,7 @@
           myUserId,
           lib,
           counters,
+          taskCategories,
         );
       }
     }
@@ -70,6 +80,7 @@
     memberMap: Map<string, string>,
     myUserId: string,
     lib: any,
+    taskCategory: TaskCategory | null,
   ): void {
     ofTask.name = dt.title;
     ofTask.note = dt.description || "";
@@ -111,12 +122,28 @@
     if (existingWaitingOn.length > 0) {
       ofTask.removeTags(existingWaitingOn);
     }
-    if (dt.assigneeId && dt.assigneeId !== myUserId) {
-      const assigneeName = memberMap.get(dt.assigneeId);
-      if (assigneeName) {
-        ofTask.addTag(lib.ensureWaitingOnTag(assigneeName));
+
+    if (taskCategory === "blocker") {
+      // Tag blockers with waiting on:<assignee>
+      if (dt.assigneeId) {
+        const assigneeName = memberMap.get(dt.assigneeId);
+        if (assigneeName) {
+          ofTask.addTag(lib.ensureWaitingOnTag(assigneeName));
+        }
+      } else {
+        // Unassigned: use the parent "waiting on" tag directly
+        ofTask.addTag(lib.ensureTagHierarchy("waiting on"));
+      }
+    } else if (taskCategory === null) {
+      // No team filtering: existing behavior
+      if (dt.assigneeId && dt.assigneeId !== myUserId) {
+        const assigneeName = memberMap.get(dt.assigneeId);
+        if (assigneeName) {
+          ofTask.addTag(lib.ensureWaitingOnTag(assigneeName));
+        }
       }
     }
+    // taskCategory === "mine": no waiting-on tag
   }
 
   // ---- Main action ----
@@ -161,6 +188,27 @@
           memberMap.set(m.userId, m.username);
         }
 
+        // ---- Team filtering ----
+        var activeTasks = dagnyTasks;
+        var taskCategories: Map<string, TaskCategory> | null = null;
+        var noFlattenIds: Set<string> | undefined = undefined;
+
+        if (mapping.teamUserId) {
+          const result = filterTasksForTeam(
+            dagnyTasks,
+            mapping.teamUserId,
+            mapping.includeUnassigned !== false,
+          );
+          activeTasks = result.filteredTasks;
+          taskCategories = result.categories;
+          noFlattenIds = new Set<string>();
+          for (const [id, cat] of result.categories) {
+            if (cat === "blocked") {
+              noFlattenIds.add(id);
+            }
+          }
+        }
+
         const target: OFTarget = lib.resolveOFTarget(mapping);
 
         const existingIndex = new Map<string, Task>();
@@ -177,7 +225,7 @@
         }
 
         const dagnyTaskMap = new Map<string, DagnyTaskWithId>();
-        for (const dt of dagnyTasks) {
+        for (const dt of activeTasks) {
           dagnyTaskMap.set(dt.taskId, dt);
         }
 
@@ -207,7 +255,7 @@
               ? (target.folder.flattenedFolders as Folder[])
               : (flattenedFolders as Folder[]);
           for (const folder of ofFolders) {
-            for (const dt of dagnyTasks) {
+            for (const dt of activeTasks) {
               if (dt.title === folder.name && !containerIds.has(dt.taskId)) {
                 containerIds.add(dt.taskId);
                 containerFolderMap.set(dt.taskId, folder.name);
@@ -217,7 +265,7 @@
 
           // Also detect legacy [OmniFocus:] description tags and
           // clean them up while adding to containerIds.
-          for (const dt of dagnyTasks) {
+          for (const dt of activeTasks) {
             if (lib.isOFContainerTask(dt)) {
               containerIds.add(dt.taskId);
               if (lib.isOFProjectTask(dt)) {
@@ -246,10 +294,11 @@
             ? target.container.sequential
             : false;
         const tree = dagToTree(
-          dagnyTasks,
+          activeTasks,
           mode,
           containerSequential,
           containerIds,
+          noFlattenIds,
         );
 
         if (target.type === "project") {
@@ -269,6 +318,7 @@
             myUserId,
             lib,
             counters,
+            taskCategories,
           );
         } else {
           // folder / everything: roots must go into OF projects.
@@ -371,6 +421,7 @@
               myUserId,
               lib,
               counters,
+              taskCategories,
             );
           }
 
@@ -387,6 +438,9 @@
             lib.setDagnyMarker(ofProj.task, mapping.dagnyProjectId, dt.taskId);
             existingIndex.set(dt.taskId, ofProj.task);
 
+            const rootCategory = taskCategories
+              ? taskCategories.get(root.dagnyTaskId) || null
+              : null;
             updateTaskFields(
               ofProj.task,
               dt,
@@ -395,6 +449,7 @@
               memberMap,
               myUserId,
               lib,
+              rootCategory,
             );
             counters.created++;
 
@@ -411,6 +466,7 @@
                 myUserId,
                 lib,
                 counters,
+                taskCategories,
               );
             }
           }

@@ -20,6 +20,8 @@ const fn = new Function(
   exports.areIndependent = areIndependent;
   exports.topologicalSort = topologicalSort;
   exports.dagToTree = dagToTree;
+  exports.flattenTree = flattenTree;
+  exports.filterTasksForTeam = filterTasksForTeam;
 `,
 );
 fn(sandbox);
@@ -31,3 +33,5 @@ export const findChain = sandbox.findChain;
 export const areIndependent = sandbox.areIndependent;
 export const topologicalSort = sandbox.topologicalSort;
 export const dagToTree = sandbox.dagToTree;
+export const flattenTree = sandbox.flattenTree;
+export const filterTasksForTeam = sandbox.filterTasksForTeam;

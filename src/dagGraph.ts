@@ -223,6 +223,7 @@ function sortByPriority(
       dagnyTaskId: node.dagnyTaskId,
       sequential: node.sequential,
       children: sortByPriority(node.children, taskMap, node.sequential),
+      noFlatten: node.noFlatten,
     };
   });
 
@@ -240,6 +241,7 @@ function dagToTree(
   mode: DependencyMode,
   containerSequential?: boolean,
   excludeIds?: Set<string>,
+  noFlattenIds?: Set<string>,
 ): OFTreeNode[] {
   const dag = buildDag(tasks, excludeIds);
   const reduced = transitiveReduction(dag.dependsOn, dag.taskIds);
@@ -258,13 +260,14 @@ function dagToTree(
 
   function buildSubtree(taskId: string): OFTreeNode {
     placed.add(taskId);
+    const nf = noFlattenIds && noFlattenIds.has(taskId) ? true : undefined;
 
     const deps = Array.from(reduced.get(taskId) || []).filter(function (d) {
       return !placed.has(d);
     });
 
     if (deps.length === 0) {
-      return { dagnyTaskId: taskId, sequential: false, children: [] };
+      return { dagnyTaskId: taskId, sequential: false, children: [], noFlatten: nf };
     }
 
     const chain = findChain(deps, reduced);
@@ -276,7 +279,7 @@ function dagToTree(
           childNodes.push(buildSubtree(depId));
         }
       }
-      return { dagnyTaskId: taskId, sequential: true, children: childNodes };
+      return { dagnyTaskId: taskId, sequential: true, children: childNodes, noFlatten: nf };
     } else if (areIndependent(deps, reduced)) {
       const childNodes: OFTreeNode[] = [];
       for (const depId of deps) {
@@ -288,35 +291,23 @@ function dagToTree(
         dagnyTaskId: taskId,
         sequential: false,
         children: childNodes,
+        noFlatten: nf,
       };
     } else {
-      if (mode === "conservative") {
-        const sorted = topologicalSort(deps, reduced);
-        const childNodes: OFTreeNode[] = [];
-        for (const depId of sorted) {
-          if (!placed.has(depId)) {
-            childNodes.push(buildSubtree(depId));
-          }
+      const useConservative = mode === "conservative" || (noFlattenIds && noFlattenIds.has(taskId));
+      const sorted = topologicalSort(deps, reduced);
+      const childNodes: OFTreeNode[] = [];
+      for (const depId of sorted) {
+        if (!placed.has(depId)) {
+          childNodes.push(buildSubtree(depId));
         }
-        return {
-          dagnyTaskId: taskId,
-          sequential: true,
-          children: childNodes,
-        };
-      } else {
-        const sorted = topologicalSort(deps, reduced);
-        const childNodes: OFTreeNode[] = [];
-        for (const depId of sorted) {
-          if (!placed.has(depId)) {
-            childNodes.push(buildSubtree(depId));
-          }
-        }
-        return {
-          dagnyTaskId: taskId,
-          sequential: false,
-          children: childNodes,
-        };
       }
+      return {
+        dagnyTaskId: taskId,
+        sequential: useConservative ? true : false,
+        children: childNodes,
+        noFlatten: nf,
+      };
     }
   }
 
@@ -327,7 +318,7 @@ function dagToTree(
     }
   }
 
-  const result: OFTreeNode[] = [];
+  var result: OFTreeNode[] = [];
   for (const rootId of roots) {
     if (!placed.has(rootId)) {
       result.push(buildSubtree(rootId));
@@ -346,10 +337,37 @@ function dagToTree(
     taskMap.set(t.taskId, t);
   }
 
+  if (noFlattenIds) {
+    result = pruneBlockedLeaves(result, noFlattenIds);
+  }
+
   const parentSeq =
     containerSequential !== undefined ? containerSequential : true;
   const flattened = flattenTree(result, parentSeq);
   return sortByPriority(flattened, taskMap, parentSeq);
+}
+
+// Remove blocked tasks (identified by noFlattenIds) that ended up as
+// leaves — they have no dependency children to auto-complete, so they
+// would appear as actions the user must complete manually.
+function pruneBlockedLeaves(
+  nodes: OFTreeNode[],
+  blockedIds: Set<string>,
+): OFTreeNode[] {
+  const result: OFTreeNode[] = [];
+  for (const node of nodes) {
+    const prunedChildren = pruneBlockedLeaves(node.children, blockedIds);
+    if (blockedIds.has(node.dagnyTaskId) && prunedChildren.length === 0) {
+      continue;
+    }
+    result.push({
+      dagnyTaskId: node.dagnyTaskId,
+      sequential: node.sequential,
+      children: prunedChildren,
+      noFlatten: node.noFlatten,
+    });
+  }
+  return result;
 }
 
 // Flatten sequential groups that are inside a sequential context.
@@ -364,7 +382,7 @@ function flattenTree(
     // First, recursively flatten children
     const flatChildren = flattenTree(node.children, node.sequential);
 
-    if (parentSequential && node.sequential && flatChildren.length > 0) {
+    if (parentSequential && node.sequential && flatChildren.length > 0 && !node.noFlatten) {
       // Flatten: hoist children before this node, make this node a leaf
       for (const child of flatChildren) {
         result.push(child);
@@ -379,8 +397,105 @@ function flattenTree(
         dagnyTaskId: node.dagnyTaskId,
         sequential: node.sequential,
         children: flatChildren,
+        noFlatten: node.noFlatten,
       });
     }
   }
   return result;
+}
+
+function filterTasksForTeam(
+  tasks: DagnyTaskWithId[],
+  teamUserId: string,
+  includeUnassigned: boolean,
+): {
+  filteredTasks: DagnyTaskWithId[];
+  categories: Map<string, TaskCategory>;
+} {
+  const taskMap = new Map<string, DagnyTaskWithId>();
+  const dependsOn = new Map<string, Set<string>>();
+  const dependedOnBy = new Map<string, Set<string>>();
+
+  for (const t of tasks) {
+    taskMap.set(t.taskId, t);
+    dependsOn.set(t.taskId, new Set<string>());
+    dependedOnBy.set(t.taskId, new Set<string>());
+  }
+  for (const t of tasks) {
+    for (const depId of t.dependsOn) {
+      if (taskMap.has(depId)) {
+        dependsOn.get(t.taskId)!.add(depId);
+        dependedOnBy.get(depId)!.add(t.taskId);
+      }
+    }
+  }
+
+  // Identify "my tasks"
+  const mine = new Set<string>();
+  for (const t of tasks) {
+    if (t.assigneeId === teamUserId) {
+      mine.add(t.taskId);
+    } else if (includeUnassigned && (t.assigneeId === null || t.assigneeId === undefined)) {
+      mine.add(t.taskId);
+    }
+  }
+
+  // BFS backward through dependsOn to find blockers
+  const blockers = new Set<string>();
+  var queue: string[] = [];
+  for (const id of mine) {
+    for (const depId of dependsOn.get(id)!) {
+      if (!mine.has(depId)) {
+        queue.push(depId);
+      }
+    }
+  }
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (blockers.has(id) || mine.has(id)) continue;
+    blockers.add(id);
+    for (const depId of dependsOn.get(id)!) {
+      if (!blockers.has(depId) && !mine.has(depId)) {
+        queue.push(depId);
+      }
+    }
+  }
+
+  // BFS forward through dependedOnBy to find blocked tasks
+  const blocked = new Set<string>();
+  queue = [];
+  for (const id of mine) {
+    for (const depId of dependedOnBy.get(id)!) {
+      if (!mine.has(depId) && !blockers.has(depId)) {
+        queue.push(depId);
+      }
+    }
+  }
+  while (queue.length > 0) {
+    const id = queue.shift()!;
+    if (blocked.has(id) || mine.has(id) || blockers.has(id)) continue;
+    blocked.add(id);
+    for (const depId of dependedOnBy.get(id)!) {
+      if (!blocked.has(depId) && !mine.has(depId) && !blockers.has(depId)) {
+        queue.push(depId);
+      }
+    }
+  }
+
+  const categories = new Map<string, TaskCategory>();
+  const filteredTasks: DagnyTaskWithId[] = [];
+  for (const t of tasks) {
+    if (mine.has(t.taskId)) {
+      categories.set(t.taskId, "mine");
+      filteredTasks.push(t);
+    } else if (blockers.has(t.taskId)) {
+      categories.set(t.taskId, "blocker");
+      filteredTasks.push(t);
+    } else if (blocked.has(t.taskId)) {
+      categories.set(t.taskId, "blocked");
+      filteredTasks.push(t);
+    }
+  }
+
+  return { filteredTasks, categories };
 }
