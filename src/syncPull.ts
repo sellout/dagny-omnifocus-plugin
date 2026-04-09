@@ -109,7 +109,22 @@
         ) {
           continue;
         }
-        const ofTag: Tag = lib.ensureTagHierarchy(dagnyTagStr);
+        var ofTag: Tag;
+        if (mapping.tagPrefix) {
+          if (mapping.forceTagPrefix) {
+            ofTag = lib.ensureTagHierarchy(mapping.tagPrefix + ":" + dagnyTagStr);
+          } else {
+            // Use unprefixed if it already exists, otherwise create prefixed
+            const unprefixed: Tag | null = flattenedTags.byName(dagnyTagStr.split(":")[0].trim());
+            if (unprefixed) {
+              ofTag = lib.ensureTagHierarchy(dagnyTagStr);
+            } else {
+              ofTag = lib.ensureTagHierarchy(mapping.tagPrefix + ":" + dagnyTagStr);
+            }
+          }
+        } else {
+          ofTag = lib.ensureTagHierarchy(dagnyTagStr);
+        }
         if (!ofTask.tags.includes(ofTag)) {
           ofTask.addTag(ofTag);
         }

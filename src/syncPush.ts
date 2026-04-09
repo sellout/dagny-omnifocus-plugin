@@ -112,6 +112,7 @@
                 usernameToId,
                 myUserId,
                 mapping.estimateMultiplier || 1,
+                mapping,
               );
               if (patch) {
                 try {
@@ -474,6 +475,7 @@
     usernameToId: Map<string, string>,
     myUserId: string,
     estimateMultiplier: number,
+    mapping: ProjectMapping,
   ): DagnyTaskUpdate {
     const patch: DagnyTaskUpdate = {};
 
@@ -488,7 +490,7 @@
       patch.statusId = dagnyStatusId;
     }
 
-    patch.tags = collectDagnyTags(ofTask, lib, usernameToId);
+    patch.tags = collectDagnyTags(ofTask, lib, usernameToId, mapping.tagPrefix || null);
 
     if (ofTask.estimatedMinutes != null) {
       patch.estimate = Math.round(ofTask.estimatedMinutes / estimateMultiplier);
@@ -533,7 +535,7 @@
       title: ofTask.name,
       description: ofTask.note || "",
       dependsOn: [],
-      tags: collectDagnyTags(ofTask, lib, usernameToId),
+      tags: collectDagnyTags(ofTask, lib, usernameToId, mapping.tagPrefix || null),
       estimate: Math.round((ofTask.estimatedMinutes || 1) / estimateMultiplier),
       value: ofTask.flagged ? 1 : null,
     };
@@ -564,12 +566,17 @@
     ofTask: Task,
     lib: any,
     usernameToId: Map<string, string>,
+    tagPrefix: string | null,
   ): string[] {
     const dagnyTags: string[] = [];
     for (const tag of ofTask.tags) {
       if (lib.isStatusTag(tag)) continue;
       if (lib.isWaitingOnTag(tag) && usernameToId.has(tag.name)) continue;
-      dagnyTags.push(lib.ofTagToDagnyString(tag));
+      var dagnyStr = lib.ofTagToDagnyString(tag);
+      if (tagPrefix && dagnyStr.startsWith(tagPrefix + ":")) {
+        dagnyStr = dagnyStr.substring(tagPrefix.length + 1);
+      }
+      dagnyTags.push(dagnyStr);
     }
     return dagnyTags;
   }

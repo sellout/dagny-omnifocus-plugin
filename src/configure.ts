@@ -223,6 +223,22 @@
         ),
       );
 
+      // ---- Tag prefix ----
+      settingsForm.addField(
+        new Form.Field.String(
+          "tagPrefix",
+          "Tag Prefix",
+          existing && existing.tagPrefix ? existing.tagPrefix : "",
+        ),
+      );
+      settingsForm.addField(
+        new Form.Field.Checkbox(
+          "forceTagPrefix",
+          "Always use prefix (even if unprefixed tag exists)",
+          existing ? existing.forceTagPrefix === true : false,
+        ),
+      );
+
       const dagnyStatuses: DagnyStatus[] = await lib.getStatuses(selectedId);
       const existingStatusMap: ProjectStatusMapping | undefined =
         lib.getProjectStatusMap(selectedId);
@@ -310,6 +326,10 @@
           : undefined,
         newTaskAssignment: teamUserId
           ? settingsForm.values["newTaskAssign"]
+          : undefined,
+        tagPrefix: settingsForm.values["tagPrefix"] || null,
+        forceTagPrefix: settingsForm.values["tagPrefix"]
+          ? settingsForm.values["forceTagPrefix"]
           : undefined,
       };
 

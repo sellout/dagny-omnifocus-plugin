@@ -87,6 +87,8 @@ interface ProjectMapping {
   teamUsername?: string | null;
   includeUnassigned?: boolean;
   newTaskAssignment?: "user" | "unassigned";
+  tagPrefix?: string | null;
+  forceTagPrefix?: boolean;
 }
 
 // Tree structure computed from Dagny's dependency DAG,
