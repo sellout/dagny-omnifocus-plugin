@@ -8,6 +8,8 @@ import {
   areIndependent,
   topologicalSort,
   dagToTree,
+  flattenTree,
+  filterTasksForTeam,
 } from "./dagGraph.wrapper";
 
 // ---- Test helpers ----
@@ -20,9 +22,14 @@ interface DagnyTaskWithId {
   statusId: string;
   tags: string[];
   estimate: number;
+  assigneeId?: string | null;
 }
 
-function makeTask(id: string, dependsOn: string[] = []): DagnyTaskWithId {
+function makeTask(
+  id: string,
+  dependsOn: string[] = [],
+  assigneeId?: string | null,
+): DagnyTaskWithId {
   return {
     taskId: id,
     title: "Task " + id,
@@ -31,6 +38,7 @@ function makeTask(id: string, dependsOn: string[] = []): DagnyTaskWithId {
     statusId: "status-1",
     tags: [],
     estimate: 1,
+    assigneeId,
   };
 }
 
@@ -508,5 +516,221 @@ describe("dagToTree properties", () => {
         }
       }),
     );
+  });
+});
+
+// ---- filterTasksForTeam ----
+
+describe("filterTasksForTeam", () => {
+  it("categorizes mine, other, and unassigned correctly", () => {
+    const tasks = [
+      makeTask("A", [], "user1"),
+      makeTask("B", [], "user2"),
+      makeTask("C", [], null),
+    ];
+    const result = filterTasksForTeam(tasks, "user1", true);
+    expect(result.categories.get("A")).toBe("mine");
+    expect(result.categories.get("C")).toBe("mine");
+    expect(result.categories.has("B")).toBe(false);
+    expect(result.filteredTasks.length).toBe(2);
+  });
+
+  it("excludes unassigned when includeUnassigned is false", () => {
+    const tasks = [makeTask("A", [], "user1"), makeTask("B", [], null)];
+    const result = filterTasksForTeam(tasks, "user1", false);
+    expect(result.categories.get("A")).toBe("mine");
+    expect(result.categories.has("B")).toBe(false);
+    expect(result.filteredTasks.length).toBe(1);
+  });
+
+  it("pulls in blocker chain transitively", () => {
+    // A(mine) depends on B(other) depends on C(other)
+    const tasks = [
+      makeTask("A", ["B"], "user1"),
+      makeTask("B", ["C"], "user2"),
+      makeTask("C", [], "user2"),
+    ];
+    const result = filterTasksForTeam(tasks, "user1", false);
+    expect(result.categories.get("A")).toBe("mine");
+    expect(result.categories.get("B")).toBe("blocker");
+    expect(result.categories.get("C")).toBe("blocker");
+    expect(result.filteredTasks.length).toBe(3);
+  });
+
+  it("pulls in blocked tasks transitively", () => {
+    // D(other) depends on A(mine); E(other) depends on D
+    const tasks = [
+      makeTask("A", [], "user1"),
+      makeTask("D", ["A"], "user2"),
+      makeTask("E", ["D"], "user2"),
+    ];
+    const result = filterTasksForTeam(tasks, "user1", false);
+    expect(result.categories.get("A")).toBe("mine");
+    expect(result.categories.get("D")).toBe("blocked");
+    expect(result.categories.get("E")).toBe("blocked");
+    expect(result.filteredTasks.length).toBe(3);
+  });
+
+  it("classifies in-between tasks as blockers", () => {
+    // A(mine) depends on B(other) depends on C(mine)
+    // B is both a blocker of A and blocked by C → categorized as blocker
+    const tasks = [
+      makeTask("A", ["B"], "user1"),
+      makeTask("B", ["C"], "user2"),
+      makeTask("C", [], "user1"),
+    ];
+    const result = filterTasksForTeam(tasks, "user1", false);
+    expect(result.categories.get("A")).toBe("mine");
+    expect(result.categories.get("B")).toBe("blocker");
+    expect(result.categories.get("C")).toBe("mine");
+  });
+
+  it("excludes tasks unrelated to mine", () => {
+    const tasks = [
+      makeTask("A", [], "user1"),
+      makeTask("B", [], "user2"),
+      makeTask("C", ["B"], "user2"),
+    ];
+    const result = filterTasksForTeam(tasks, "user1", false);
+    expect(result.filteredTasks.length).toBe(1);
+    expect(result.categories.get("A")).toBe("mine");
+    expect(result.categories.has("B")).toBe(false);
+    expect(result.categories.has("C")).toBe(false);
+  });
+
+  it("includes unassigned blockers even when includeUnassigned is false", () => {
+    // A(mine) depends on B(unassigned)
+    const tasks = [makeTask("A", ["B"], "user1"), makeTask("B", [], null)];
+    const result = filterTasksForTeam(tasks, "user1", false);
+    expect(result.categories.get("A")).toBe("mine");
+    expect(result.categories.get("B")).toBe("blocker");
+    expect(result.filteredTasks.length).toBe(2);
+  });
+
+  it("handles tasks with undefined assigneeId as unassigned", () => {
+    const tasks = [makeTask("A", [])]; // assigneeId is undefined
+    const result = filterTasksForTeam(tasks, "user1", true);
+    expect(result.categories.get("A")).toBe("mine");
+  });
+});
+
+// ---- flattenTree with noFlatten ----
+
+describe("flattenTree with noFlatten", () => {
+  it("does not flatten nodes with noFlatten in sequential parent", () => {
+    // Seq parent containing a sequential node with noFlatten
+    const nodes = [
+      {
+        dagnyTaskId: "A",
+        sequential: true,
+        children: [
+          { dagnyTaskId: "B", sequential: false, children: [] },
+          { dagnyTaskId: "C", sequential: false, children: [] },
+        ],
+        noFlatten: true,
+      },
+    ];
+    const result = flattenTree(nodes, true);
+    // A should NOT be flattened — should keep its children
+    expect(result.length).toBe(1);
+    expect(result[0].dagnyTaskId).toBe("A");
+    expect(result[0].children.length).toBe(2);
+  });
+
+  it("still flattens nodes without noFlatten in sequential parent", () => {
+    const nodes = [
+      {
+        dagnyTaskId: "A",
+        sequential: true,
+        children: [
+          { dagnyTaskId: "B", sequential: false, children: [] },
+          { dagnyTaskId: "C", sequential: false, children: [] },
+        ],
+      },
+    ];
+    const result = flattenTree(nodes, true);
+    // A should be flattened: B, C hoisted, A becomes leaf
+    expect(result.length).toBe(3);
+    expect(result[0].dagnyTaskId).toBe("B");
+    expect(result[1].dagnyTaskId).toBe("C");
+    expect(result[2].dagnyTaskId).toBe("A");
+    expect(result[2].children.length).toBe(0);
+  });
+});
+
+// ---- dagToTree with noFlattenIds ----
+
+describe("dagToTree with noFlattenIds", () => {
+  it("preserves nesting for noFlatten tasks", () => {
+    // A depends on B depends on C — normally B would be flattened
+    // With noFlattenIds containing B, it should keep its children
+    const tasks = [
+      makeTask("A", ["B"]),
+      makeTask("B", ["C"]),
+      makeTask("C", []),
+    ];
+    const noFlatten = new Set(["B"]);
+    const tree = dagToTree(tasks, "conservative", true, undefined, noFlatten);
+    // Find node B in the tree
+    function findNode(nodes: any[], id: string): any {
+      for (const n of nodes) {
+        if (n.dagnyTaskId === id) return n;
+        const found = findNode(n.children, id);
+        if (found) return found;
+      }
+      return null;
+    }
+    const nodeB = findNode(tree, "B");
+    expect(nodeB).not.toBeNull();
+    expect(nodeB.noFlatten).toBe(true);
+    // B should still have C as a child (not flattened)
+    expect(nodeB.children.length).toBe(1);
+    expect(nodeB.children[0].dagnyTaskId).toBe("C");
+  });
+
+  it("forces conservative (sequential) for noFlatten tasks in optimistic mode", () => {
+    // A depends on both B and C, and B depends on C.
+    // This is a mixed (non-chain, non-independent) case.
+    // In optimistic mode, A's children would normally be parallel.
+    // With A in noFlattenIds, it should be forced sequential.
+    const tasks = [
+      makeTask("A", ["B", "C"]),
+      makeTask("B", ["C"]),
+      makeTask("C", []),
+    ];
+    const noFlatten = new Set(["A"]);
+    const tree = dagToTree(tasks, "optimistic", false, undefined, noFlatten);
+    function findNode(nodes: any[], id: string): any {
+      for (const n of nodes) {
+        if (n.dagnyTaskId === id) return n;
+        const found = findNode(n.children, id);
+        if (found) return found;
+      }
+      return null;
+    }
+    const nodeA = findNode(tree, "A");
+    expect(nodeA).not.toBeNull();
+    expect(nodeA.sequential).toBe(true);
+  });
+
+  it("prunes blocked leaf tasks from the tree", () => {
+    // A (mine) has no deps. X and Y both depend on A (both blocked).
+    // X is built first and gets A as a child. Y has no unplaced deps
+    // and would be a leaf — it should be pruned.
+    const tasks = [
+      makeTask("A", []),
+      makeTask("X", ["A"]),
+      makeTask("Y", ["A"]),
+    ];
+    const noFlatten = new Set(["X", "Y"]);
+    const tree = dagToTree(tasks, "conservative", false, undefined, noFlatten);
+    const allIds = collectAllIds(tree);
+    // One of X/Y should have A as a child; the other should be pruned
+    expect(allIds.has("A")).toBe(true);
+    // Only one of X/Y should survive (the one that got A)
+    const hasX = allIds.has("X");
+    const hasY = allIds.has("Y");
+    expect(hasX || hasY).toBe(true);
+    expect(hasX && hasY).toBe(false);
   });
 });

@@ -26,6 +26,7 @@ declare class Task implements DatabaseObject {
   children: Task[];
   hasChildren: boolean;
   sequential: boolean;
+  completedByChildren: boolean;
   estimatedMinutes: number | null;
   containingProject: Project | null;
   parent: Task | null;

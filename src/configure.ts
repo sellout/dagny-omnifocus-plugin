@@ -132,6 +132,9 @@
         (m: ProjectMapping) => m.dagnyProjectId === selectedId,
       );
 
+      // ---- Fetch project members for team filtering ----
+      const members: ProjectMember[] = await lib.getProjectMembers(selectedId);
+
       // ---- Step 3: Settings + status mapping ----
       const ofTypeOptions = ["project", "folder", "everything"];
       const ofTypeLabels = [
@@ -182,6 +185,57 @@
           existing && existing.estimateMultiplier
             ? String(existing.estimateMultiplier)
             : "1",
+        ),
+      );
+
+      // ---- Team filtering ----
+      const teamUserIds = ["__none__"];
+      const teamUserLabels = ["None (sync all tasks)"];
+      for (const m of members) {
+        teamUserIds.push(m.userId);
+        teamUserLabels.push(m.username);
+      }
+      settingsForm.addField(
+        new Form.Field.Option(
+          "teamUser",
+          "Team User",
+          teamUserIds,
+          teamUserLabels,
+          existing && existing.teamUserId ? existing.teamUserId : "__none__",
+        ),
+      );
+      settingsForm.addField(
+        new Form.Field.Checkbox(
+          "includeUnassigned",
+          "Include Unassigned Tasks",
+          existing ? existing.includeUnassigned !== false : true,
+        ),
+      );
+      settingsForm.addField(
+        new Form.Field.Option(
+          "newTaskAssign",
+          "New Task Assignment",
+          ["user", "unassigned"],
+          ["Assign to me", "Leave unassigned"],
+          existing && existing.newTaskAssignment
+            ? existing.newTaskAssignment
+            : "user",
+        ),
+      );
+
+      // ---- Tag prefix ----
+      settingsForm.addField(
+        new Form.Field.String(
+          "tagPrefix",
+          "Tag Prefix",
+          existing && existing.tagPrefix ? existing.tagPrefix : "",
+        ),
+      );
+      settingsForm.addField(
+        new Form.Field.Checkbox(
+          "forceTagPrefix",
+          "Always use prefix (even if unprefixed tag exists)",
+          existing ? existing.forceTagPrefix === true : false,
         ),
       );
 
@@ -248,6 +302,17 @@
         settingsForm.values["depmode"] || "conservative";
       const estMult = parseFloat(settingsForm.values["estmult"]) || 1;
 
+      const teamUserRaw: string = settingsForm.values["teamUser"];
+      const teamUserId: string | null =
+        teamUserRaw && teamUserRaw !== "__none__" ? teamUserRaw : null;
+      const teamUsername: string | null = teamUserId
+        ? (
+            members.find((m: ProjectMember) => m.userId === teamUserId) || {
+              username: null,
+            }
+          ).username
+        : null;
+
       const mapping: ProjectMapping = {
         dagnyProjectId: selectedId,
         dagnyProjectName: selectedDagny.name,
@@ -256,6 +321,18 @@
         ofDefaultProject: ofDefaultProject,
         dependencyMode: depMode,
         estimateMultiplier: estMult,
+        teamUserId: teamUserId,
+        teamUsername: teamUsername,
+        includeUnassigned: teamUserId
+          ? settingsForm.values["includeUnassigned"]
+          : undefined,
+        newTaskAssignment: teamUserId
+          ? settingsForm.values["newTaskAssign"]
+          : undefined,
+        tagPrefix: settingsForm.values["tagPrefix"] || null,
+        forceTagPrefix: settingsForm.values["tagPrefix"]
+          ? settingsForm.values["forceTagPrefix"]
+          : undefined,
       };
 
       const updatedMappings = existingMappings.filter(
