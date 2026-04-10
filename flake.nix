@@ -34,6 +34,15 @@
     flake-utils.follows = "flaky/flake-utils";
     nixpkgs.follows = "flaky/nixpkgs";
 
+    omni-automation-types = {
+      url = "github:sellout/omni-automation-types";
+      inputs = {
+        flaky.follows = "flaky";
+        nixpkgs.follows = "nixpkgs";
+        systems.follows = "systems";
+      };
+    };
+
     ## This is the only system supported by OmniFocus.
     systems.url = "github:nix-systems/aarch64-darwin";
   };

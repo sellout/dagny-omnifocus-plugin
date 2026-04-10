@@ -1,6 +1,6 @@
 (() => {
   const credentials = new Credentials();
-  const preferences = new Preferences();
+  const preferences = new Preferences(null);
 
   const SERVICE_NAME = "dagny-sync";
   const PREF_BASE_URL = "dagnyBaseUrl";
@@ -82,7 +82,10 @@
     password?: string,
   ): Promise<void> {
     if (!username || !password) {
-      const cred = credentials.read(SERVICE_NAME);
+      const cred = credentials.read(SERVICE_NAME) as {
+        user: string;
+        password: string;
+      } | null;
       if (!cred) {
         throw new Error(
           "No Dagny credentials configured. Run Configure first.",
@@ -101,11 +104,12 @@
     if (resp.statusCode !== 204 && resp.statusCode !== 200) {
       throw new Error("Dagny login failed: HTTP " + resp.statusCode);
     }
-    const cookieKey = Object.keys(resp.headers).find(
+    const headers = resp.headers as Record<string, string>;
+    const cookieKey = Object.keys(headers).find(
       (k: string) => k.toLowerCase() === "set-cookie",
     );
     if (cookieKey) {
-      const raw = String(resp.headers[cookieKey]);
+      const raw = String(headers[cookieKey]);
       const jwtMatch = raw.match(/JWT-Cookie=([^;]+)/);
       const xsrfMatch = raw.match(/XSRF-TOKEN=([^;]+)/);
       if (jwtMatch && xsrfMatch) {
@@ -447,7 +451,7 @@
 
     if (entry.ofAction === "completed") {
       if (!ofTask.completed) {
-        ofTask.markComplete();
+        ofTask.markComplete(null);
       }
     } else if (entry.ofAction === "dropped") {
       if (ofTask.taskStatus !== Task.Status.Dropped) {

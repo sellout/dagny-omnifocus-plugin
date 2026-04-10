@@ -9,7 +9,8 @@
     "declaration": false,
     "sourceMap": false,
     "noEmit": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["@sellout/omni-automation-types/omnifocus"]
   },
   "include": ["src/**/*.ts"]
 }

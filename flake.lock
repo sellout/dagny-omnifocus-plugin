@@ -267,6 +267,37 @@
         "type": "github"
       }
     },
+    "omni-automation-types": {
+      "inputs": {
+        "flake-utils": [
+          "omni-automation-types",
+          "flaky",
+          "flake-utils"
+        ],
+        "flaky": [
+          "flaky"
+        ],
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "systems": [
+          "systems"
+        ]
+      },
+      "locked": {
+        "lastModified": 1775796891,
+        "narHash": "sha256-vC4kPhTgyeR+4UxV/QodoFv9GlQ+p9KRpIjvLlY8q+A=",
+        "owner": "sellout",
+        "repo": "omni-automation-types",
+        "rev": "bcd828bea374c01b4808d175ffa9d169ff42b404",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sellout",
+        "repo": "omni-automation-types",
+        "type": "github"
+      }
+    },
     "project-manager": {
       "inputs": {
         "flake-schemas": "flake-schemas",
@@ -325,6 +356,7 @@
           "flaky",
           "nixpkgs"
         ],
+        "omni-automation-types": "omni-automation-types",
         "systems": "systems"
       }
     },

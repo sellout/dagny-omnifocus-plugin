@@ -183,7 +183,7 @@
           "Not Configured",
           "No project mappings found. Run Configure first.",
         );
-        await alert.show();
+        await alert.show(null);
         return;
       }
 
@@ -502,10 +502,10 @@
           counters.updated +
           " task(s).",
       );
-      await summary.show();
+      await summary.show(null);
     } catch (err: any) {
       const errAlert = new Alert("Pull Error", err.message);
-      await errAlert.show();
+      await errAlert.show(null);
     }
   });
 

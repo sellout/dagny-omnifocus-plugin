@@ -2,12 +2,20 @@
   flake-utils,
   flaky,
   nixpkgs,
+  omni-automation-types,
   self,
   systems,
 }: let
   pname = "dagny-omnifocus-plugin";
 
   supportedSystems = import systems;
+
+  ## Symlink the types package into node_modules so tsc can find it.
+  setupTypes = system: ''
+    mkdir -p node_modules/@sellout
+    ln -s ${omni-automation-types.packages.${system}.omni-automation-types} \
+      node_modules/@sellout/omni-automation-types
+  '';
 
   localPackages = pkgs: {
     "${pname}" = pkgs.checkedDrv (pkgs.stdenv.mkDerivation {
@@ -22,6 +30,7 @@
       ];
 
       buildPhase = ''
+        ${setupTypes pkgs.stdenv.hostPlatform.system}
         tsc --project tsconfig.json
         node build.mjs
       '';
@@ -106,6 +115,7 @@ in
             pkgs.typescript
           ];
           buildPhase = ''
+            ${setupTypes system}
             tsc --project tsconfig.json
             npx vitest run
           '';

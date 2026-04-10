@@ -23,15 +23,17 @@
       if (!loggedIn) {
         const connForm = new Form();
         connForm.addField(
-          new Form.Field.String("baseUrl", "Server URL", lib.getBaseUrl()),
+          new Form.Field.String("baseUrl", "Server URL", lib.getBaseUrl(), null),
+          null,
         );
-        connForm.addField(new Form.Field.String("username", "Username", ""));
-        connForm.addField(new Form.Field.Password("password", "Password", ""));
+        connForm.addField(new Form.Field.String("username", "Username", "", null), null);
+        connForm.addField(new Form.Field.Password("password", "Password", ""), null);
         await connForm.show("Dagny Connection", "Connect");
+        const connValues = connForm.values as Record<string, any>;
 
-        const baseUrl: string = connForm.values["baseUrl"];
-        const username: string = connForm.values["username"];
-        const password: string = connForm.values["password"];
+        const baseUrl: string = connValues["baseUrl"];
+        const username: string = connValues["username"];
+        const password: string = connValues["password"];
 
         lib.setBaseUrl(baseUrl);
 
@@ -42,7 +44,7 @@
           "Connected",
           "Logged in as " + me.username + " (" + me.email + ")",
         );
-        await connAlert.show();
+        await connAlert.show(null);
       }
 
       // ---- Step 2: Project Mapping ----
@@ -98,24 +100,28 @@
           projIds,
           projNames,
           defaultDagnyId,
+          null,
         ),
+        null,
       );
       pickForm.addField(
-        new Form.Field.String("newName", "New Project Name", ""),
+        new Form.Field.String("newName", "New Project Name", "", null),
+        null,
       );
       await pickForm.show("Configure Mapping", "Next");
+      const pickValues = pickForm.values as Record<string, any>;
 
-      var selectedId: string = pickForm.values["project"];
+      var selectedId: string = pickValues["project"];
       var selectedDagny: DagnyProject;
 
       if (selectedId === "__new__") {
-        const newName: string = pickForm.values["newName"];
+        const newName: string = pickValues["newName"];
         if (!newName) {
           const err = new Alert(
             "Missing Name",
             "Enter a name for the new Dagny project.",
           );
-          await err.show();
+          await err.show(null);
           return;
         }
         selectedDagny = await lib.createProject(newName);
@@ -153,21 +159,27 @@
           ofTypeOptions,
           ofTypeLabels,
           existing ? existing.ofType : contextOfType,
+          null,
         ),
+        null,
       );
       settingsForm.addField(
         new Form.Field.String(
           "name",
           "OF Name",
           existing ? existing.ofName || "" : contextOfName,
+          null,
         ),
+        null,
       );
       settingsForm.addField(
         new Form.Field.String(
           "default",
           "Default Project (folder mode)",
           existing ? existing.ofDefaultProject || "" : "",
+          null,
         ),
+        null,
       );
       settingsForm.addField(
         new Form.Field.Option(
@@ -176,7 +188,9 @@
           ["conservative", "optimistic"],
           ["Conservative (add edges)", "Optimistic (drop edges)"],
           existing ? existing.dependencyMode || "conservative" : "conservative",
+          null,
         ),
+        null,
       );
       settingsForm.addField(
         new Form.Field.String(
@@ -185,7 +199,9 @@
           existing && existing.estimateMultiplier
             ? String(existing.estimateMultiplier)
             : "1",
+          null,
         ),
+        null,
       );
 
       // ---- Team filtering ----
@@ -202,7 +218,9 @@
           teamUserIds,
           teamUserLabels,
           existing && existing.teamUserId ? existing.teamUserId : "__none__",
+          null,
         ),
+        null,
       );
       settingsForm.addField(
         new Form.Field.Checkbox(
@@ -210,6 +228,7 @@
           "Include Unassigned Tasks",
           existing ? existing.includeUnassigned !== false : true,
         ),
+        null,
       );
       settingsForm.addField(
         new Form.Field.Option(
@@ -220,7 +239,9 @@
           existing && existing.newTaskAssignment
             ? existing.newTaskAssignment
             : "user",
+          null,
         ),
+        null,
       );
 
       // ---- Tag prefix ----
@@ -229,7 +250,9 @@
           "tagPrefix",
           "Tag Prefix",
           existing && existing.tagPrefix ? existing.tagPrefix : "",
+          null,
         ),
+        null,
       );
       settingsForm.addField(
         new Form.Field.Checkbox(
@@ -237,6 +260,7 @@
           "Always use prefix (even if unprefixed tag exists)",
           existing ? existing.forceTagPrefix === true : false,
         ),
+        null,
       );
 
       const dagnyStatuses: DagnyStatus[] = await lib.getStatuses(selectedId);
@@ -261,7 +285,9 @@
               ofActions,
               ofLabels,
               existingEntry ? existingEntry.ofAction : defaultAction,
+              null,
             ),
+            null,
           );
           settingsForm.addField(
             new Form.Field.Checkbox(
@@ -269,24 +295,26 @@
               ds.name + " \u2014 Default for its OF action?",
               existingEntry ? existingEntry.isDefault : false,
             ),
+            null,
           );
         }
       }
 
       await settingsForm.show(selectedDagny.name, "Save");
+      const settingsValues = settingsForm.values as Record<string, any>;
 
       // ---- Process and save ----
-      const ofType: string = settingsForm.values["type"];
-      const ofName: string | null = settingsForm.values["name"] || null;
+      const ofType: string = settingsValues["type"];
+      const ofName: string | null = settingsValues["name"] || null;
       const ofDefaultProject: string | null =
-        settingsForm.values["default"] || null;
+        settingsValues["default"] || null;
 
       if (ofType === "project" && !ofName) {
         const err = new Alert(
           "Missing Name",
           "Project mapping requires an OmniFocus project name.",
         );
-        await err.show();
+        await err.show(null);
         return;
       }
       if (ofType === "folder" && !ofName) {
@@ -294,15 +322,15 @@
           "Missing Name",
           "Folder mapping requires an OmniFocus folder name.",
         );
-        await err.show();
+        await err.show(null);
         return;
       }
 
       const depMode: DependencyMode =
-        settingsForm.values["depmode"] || "conservative";
-      const estMult = parseFloat(settingsForm.values["estmult"]) || 1;
+        settingsValues["depmode"] || "conservative";
+      const estMult = parseFloat(settingsValues["estmult"]) || 1;
 
-      const teamUserRaw: string = settingsForm.values["teamUser"];
+      const teamUserRaw: string = settingsValues["teamUser"];
       const teamUserId: string | null =
         teamUserRaw && teamUserRaw !== "__none__" ? teamUserRaw : null;
       const teamUsername: string | null = teamUserId
@@ -324,14 +352,14 @@
         teamUserId: teamUserId,
         teamUsername: teamUsername,
         includeUnassigned: teamUserId
-          ? settingsForm.values["includeUnassigned"]
+          ? settingsValues["includeUnassigned"]
           : undefined,
         newTaskAssignment: teamUserId
-          ? settingsForm.values["newTaskAssign"]
+          ? settingsValues["newTaskAssign"]
           : undefined,
-        tagPrefix: settingsForm.values["tagPrefix"] || null,
-        forceTagPrefix: settingsForm.values["tagPrefix"]
-          ? settingsForm.values["forceTagPrefix"]
+        tagPrefix: settingsValues["tagPrefix"] || null,
+        forceTagPrefix: settingsValues["tagPrefix"]
+          ? settingsValues["forceTagPrefix"]
           : undefined,
       };
 
@@ -345,8 +373,8 @@
         const statusEntries: StatusMappingEntry[] = [];
         for (let j = 0; j < dagnyStatuses.length; j++) {
           const ds = dagnyStatuses[j];
-          const ofAction: OFAction = settingsForm.values["action_" + j];
-          const isDefault: boolean = settingsForm.values["default_" + j];
+          const ofAction: OFAction = settingsValues["action_" + j];
+          const isDefault: boolean = settingsValues["default_" + j];
           statusEntries.push({
             dagnyStatusId: ds.id,
             dagnyStatusName: ds.name,
@@ -384,11 +412,11 @@
         "Mapping Saved",
         "Saved mapping for " + selectedDagny.name + ". Use Pull/Push to sync.",
       );
-      await doneAlert.show();
+      await doneAlert.show(null);
     } catch (err: any) {
       if (err.causedByUserCancelling) return;
       const errAlert = new Alert("Configuration Error", err.message);
-      await errAlert.show();
+      await errAlert.show(null);
     }
   });
 

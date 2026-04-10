@@ -14,7 +14,7 @@
           "Not Configured",
           "No project mappings found. Run Configure first.",
         );
-        await alert.show();
+        await alert.show(null);
         return;
       }
 
@@ -323,14 +323,14 @@
         if (target.type === "project" && target.container) {
           await processProject(target.container);
         } else if (target.type === "folder" && target.folder) {
-          for (var proj of target.folder.flattenedProjects) {
+          for (var proj of target.folder.flattenedProjects as Project[]) {
             await processProject(proj);
           }
         } else {
           for (var proj of flattenedProjects as Project[]) {
             await processProject(proj);
           }
-          var inboxTasks: Task[] = inbox ? inbox.tasks || [] : [];
+          var inboxTasks: Task[] = inbox ? Array.from(inbox) : [];
           if (inboxTasks.length > 0) {
             await processSiblings(inboxTasks, false, null);
           }
@@ -376,10 +376,10 @@
           totalUpdated +
           " task(s) in Dagny.",
       );
-      await summary.show();
+      await summary.show(null);
     } catch (err: any) {
       const errAlert = new Alert("Push Error", err.message);
-      await errAlert.show();
+      await errAlert.show(null);
     }
   });
 

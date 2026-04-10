@@ -17,7 +17,7 @@
           "No Selection",
           "Select a project or folder to remove its Dagny mapping.",
         );
-        await alert.show();
+        await alert.show(null);
         return;
       }
 
@@ -37,7 +37,7 @@
           "No Mapping",
           "'" + selectedName + "' is not mapped to any Dagny project.",
         );
-        await alert.show();
+        await alert.show(null);
         return;
       }
 
@@ -56,7 +56,7 @@
       );
       confirmAlert.addOption("Remove");
       confirmAlert.addOption("Cancel");
-      const result = await confirmAlert.show();
+      const result = await confirmAlert.show(null);
 
       // addOption index: 0 = Remove, 1 = Cancel
       if (result !== 0) return;
@@ -85,10 +85,10 @@
         "Mapping Removed",
         "Removed Dagny mapping for '" + selectedName + "'.",
       );
-      await doneAlert.show();
+      await doneAlert.show(null);
     } catch (err: any) {
       const errAlert = new Alert("Error", err.message);
-      await errAlert.show();
+      await errAlert.show(null);
     }
   });
 
