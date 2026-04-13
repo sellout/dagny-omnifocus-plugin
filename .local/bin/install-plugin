@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+plugin_name="DagnySync.omnifocusjs"
+## TODO: I’m not so sure about this destination path.
+## dest_dir="$HOME/Library/Containers/com.omnigroup.OmniFocus4/Data/Library/Application Support/Plug-Ins"
+dest_dir=.
+
+src="${1:-result}/$plugin_name"
+
+if [ ! -d "$src" ]; then
+  echo "error: $src not found — run 'nix build' first" >&2
+  exit 1
+fi
+
+mkdir -p "$dest_dir"
+rm -rf "$dest_dir/$plugin_name"
+cp -rL "$src" "$dest_dir/$plugin_name"
+chmod -R u+w "$dest_dir/$plugin_name"
+
+echo "Installed $plugin_name to $dest_dir"

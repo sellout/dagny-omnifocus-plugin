@@ -55,6 +55,21 @@ This command ensures that any work you do within this repository happens within 
 
 This is sort-of a catch-all for keeping your environment up-to-date. It regenerates files, wires up the project’s Git configuration, ensures the shells have the right packages, configured the right way, enables checks & formatters, etc.
 
+#### installation
+
+After building, the plugin needs to be copied into OmniFocus's plugin directory with writable permissions (Nix store paths are read-only, which OmniFocus doesn't handle):
+
+```bash
+nix build
+.local/bin/install-plugin
+```
+
+The script copies `result/DagnySync.omnifocusjs` into `~/Library/Containers/com.omnigroup.OmniFocus4/Data/Library/Application Support/Plug-Ins/` and sets write permissions. You can also pass a custom source directory:
+
+```bash
+.local/bin/install-plugin path/to/build/output
+```
+
 ### non-Nix users
 
 ## building & development
