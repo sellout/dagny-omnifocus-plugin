@@ -13,6 +13,7 @@
   programs.git.ignores = [
     "/DagnySync.omnifocusjs/Resources/*.js"
     "/build/"
+    "/dist/"
     "/node_modules/"
   ];
 

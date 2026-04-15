@@ -1,4 +1,6 @@
 // Dagny REST API types and plugin configuration types.
+// Graph algorithm types (DagnyTaskWithId, OFTreeNode, DependencyMode,
+// TaskCategory) live in graphTypes.d.ts — do not duplicate here.
 
 interface DagnyProject {
   id: string;
@@ -13,22 +15,6 @@ interface DagnyStatus {
   color: string;
   isClosed: boolean;
   sortOrder: number;
-}
-
-interface DagnyTaskWithId {
-  taskId: string;
-  title: string;
-  description: string;
-  dependsOn: string[];
-  statusId: string;
-  tags: string[];
-  estimate: number;
-  value?: number | null;
-  effectiveValue?: number | null;
-  assigneeId?: string | null;
-  collaboratorIds?: string[];
-  hasGitHubLink?: boolean;
-  hasPR?: boolean;
 }
 
 interface DagnyTaskCreate {
@@ -73,8 +59,6 @@ interface UserProfile {
 type OFTargetType = "project" | "folder" | "everything";
 type OFAction = "active" | "completed" | "dropped";
 
-type DependencyMode = "conservative" | "optimistic";
-
 interface ProjectMapping {
   dagnyProjectId: string;
   dagnyProjectName: string;
@@ -90,17 +74,6 @@ interface ProjectMapping {
   tagPrefix?: string | null;
   forceTagPrefix?: boolean;
 }
-
-// Tree structure computed from Dagny's dependency DAG,
-// describing the intended OF hierarchy.
-interface OFTreeNode {
-  dagnyTaskId: string;
-  sequential: boolean;
-  children: OFTreeNode[];
-  noFlatten?: boolean;
-}
-
-type TaskCategory = "mine" | "blocker" | "blocked";
 
 interface StatusMappingEntry {
   dagnyStatusId: string;

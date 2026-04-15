@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ES2020",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "declaration": true,
+    "sourceMap": false,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/graphTypes.d.ts",
+    "src/dagGraph.ts",
+    "src/dotParser.ts",
+    "src/dotEmitter.ts",
+    "src/index.ts"
+  ]
+}

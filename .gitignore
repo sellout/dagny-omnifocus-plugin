@@ -2,6 +2,7 @@
 /source
 /DagnySync.omnifocusjs/Resources/*.js
 /build/
+/dist/
 /node_modules/
 /.cache/vale/*
 !/.cache/vale/config/

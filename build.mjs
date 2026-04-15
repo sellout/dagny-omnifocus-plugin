@@ -6,6 +6,7 @@ import { readFileSync, writeFileSync, copyFileSync, mkdirSync } from "fs";
 import { join } from "path";
 
 const build = "build";
+const dist = "dist";
 const out = join("DagnySync.omnifocusjs", "Resources");
 
 mkdirSync(out, { recursive: true });
@@ -21,13 +22,12 @@ for (const f of [
 }
 
 // syncPull.js = dagGraph.js + syncPull.js (concatenated)
-// dagGraph.js contains top-level function declarations.
-// syncPull.js is an IIFE that references them.
-// We inject dagGraph's functions inside syncPull's IIFE.
-const dagGraph = readFileSync(join(build, "dagGraph.js"), "utf-8").replace(
-  /^"use strict";\s*/,
-  "",
-);
+// dagGraph.js is compiled as an ES module (dist/); strip module syntax
+// so it works inside syncPull's IIFE in the OmniFocus plugin.
+const dagGraph = readFileSync(join(dist, "dagGraph.js"), "utf-8")
+  .replace(/^"use strict";\s*/m, "")
+  .replace(/^export /gm, "")
+  .replace(/^import .*;\s*$/gm, "");
 const syncPull = readFileSync(join(build, "syncPull.js"), "utf-8");
 
 // Insert dagGraph functions right after the IIFE opening

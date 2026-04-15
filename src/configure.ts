@@ -23,11 +23,22 @@
       if (!loggedIn) {
         const connForm = new Form();
         connForm.addField(
-          new Form.Field.String("baseUrl", "Server URL", lib.getBaseUrl(), null),
+          new Form.Field.String(
+            "baseUrl",
+            "Server URL",
+            lib.getBaseUrl(),
+            null,
+          ),
           null,
         );
-        connForm.addField(new Form.Field.String("username", "Username", "", null), null);
-        connForm.addField(new Form.Field.Password("password", "Password", ""), null);
+        connForm.addField(
+          new Form.Field.String("username", "Username", "", null),
+          null,
+        );
+        connForm.addField(
+          new Form.Field.Password("password", "Password", ""),
+          null,
+        );
         await connForm.show("Dagny Connection", "Connect");
         const connValues = connForm.values as Record<string, any>;
 
@@ -306,8 +317,7 @@
       // ---- Process and save ----
       const ofType: string = settingsValues["type"];
       const ofName: string | null = settingsValues["name"] || null;
-      const ofDefaultProject: string | null =
-        settingsValues["default"] || null;
+      const ofDefaultProject: string | null = settingsValues["default"] || null;
 
       if (ofType === "project" && !ofName) {
         const err = new Alert(

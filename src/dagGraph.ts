@@ -1,8 +1,9 @@
 // Pure DAG-to-tree conversion functions.
 // Testable independently of OmniFocus or Dagny.
-// Compiled into syncPull.js via tsconfig.syncPull.json (outFile).
+// Built as an ES module (tsconfig.lib.json); module syntax is stripped
+// by build.mjs before injection into the OmniFocus plugin bundle.
 
-function buildDag(
+export function buildDag(
   tasks: DagnyTaskWithId[],
   excludeIds?: Set<string>,
 ): {
@@ -33,7 +34,7 @@ function buildDag(
   return { dependsOn, dependedOnBy, taskIds };
 }
 
-function transitiveReduction(
+export function transitiveReduction(
   dependsOn: Map<string, Set<string>>,
   taskIds: Set<string>,
 ): Map<string, Set<string>> {
@@ -58,7 +59,7 @@ function transitiveReduction(
   return reduced;
 }
 
-function isReachable(
+export function isReachable(
   from: string,
   to: string,
   dependsOn: Map<string, Set<string>>,
@@ -80,7 +81,7 @@ function isReachable(
   return false;
 }
 
-function findChain(
+export function findChain(
   taskIds: string[],
   dependsOn: Map<string, Set<string>>,
 ): string[] | null {
@@ -127,7 +128,7 @@ function findChain(
   return chain.length === taskIds.length ? chain : null;
 }
 
-function areIndependent(
+export function areIndependent(
   taskIds: string[],
   dependsOn: Map<string, Set<string>>,
 ): boolean {
@@ -142,7 +143,7 @@ function areIndependent(
   return true;
 }
 
-function topologicalSort(
+export function topologicalSort(
   taskIds: string[],
   dependsOn: Map<string, Set<string>>,
 ): string[] {
@@ -198,7 +199,7 @@ function topologicalSort(
 // Max effectiveValue of a node and all its descendants in the OF tree.
 // A group with no priority but containing a high-priority child should
 // sort above a low-priority leaf.
-function subtreePriority(
+export function subtreePriority(
   node: OFTreeNode,
   taskMap: Map<string, DagnyTaskWithId>,
 ): number {
@@ -213,7 +214,7 @@ function subtreePriority(
 
 // Sort children of parallel groups by priority (highest first).
 // Sequential group children are left in dependency order.
-function sortByPriority(
+export function sortByPriority(
   nodes: OFTreeNode[],
   taskMap: Map<string, DagnyTaskWithId>,
   parentSequential: boolean,
@@ -236,7 +237,7 @@ function sortByPriority(
   return processed;
 }
 
-function dagToTree(
+export function dagToTree(
   tasks: DagnyTaskWithId[],
   mode: DependencyMode,
   containerSequential?: boolean,
@@ -361,7 +362,7 @@ function dagToTree(
 // Remove blocked tasks (identified by noFlattenIds) that ended up as
 // leaves — they have no dependency children to auto-complete, so they
 // would appear as actions the user must complete manually.
-function pruneBlockedLeaves(
+export function pruneBlockedLeaves(
   nodes: OFTreeNode[],
   blockedIds: Set<string>,
 ): OFTreeNode[] {
@@ -384,7 +385,7 @@ function pruneBlockedLeaves(
 // Flatten sequential groups that are inside a sequential context.
 // E.g., Seq[A(seq)->[B, C]] becomes Seq[B, C, A(leaf)].
 // The parent node absorbs the children, and the group node becomes a leaf.
-function flattenTree(
+export function flattenTree(
   nodes: OFTreeNode[],
   parentSequential: boolean,
 ): OFTreeNode[] {
@@ -420,7 +421,7 @@ function flattenTree(
   return result;
 }
 
-function filterTasksForTeam(
+export function filterTasksForTeam(
   tasks: DagnyTaskWithId[],
   teamUserId: string,
   includeUnassigned: boolean,

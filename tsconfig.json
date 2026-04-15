@@ -12,5 +12,11 @@
     "skipLibCheck": true,
     "types": ["@sellout/omni-automation-types/omnifocus"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "src/dagGraph.ts",
+    "src/dotParser.ts",
+    "src/dotEmitter.ts",
+    "src/index.ts"
+  ]
 }

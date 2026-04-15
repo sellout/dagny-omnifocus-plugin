@@ -10,20 +10,9 @@ import {
   dagToTree,
   flattenTree,
   filterTasksForTeam,
-} from "./dagGraph.wrapper";
+} from "../src/dagGraph.js";
 
 // ---- Test helpers ----
-
-interface DagnyTaskWithId {
-  taskId: string;
-  title: string;
-  description: string;
-  dependsOn: string[];
-  statusId: string;
-  tags: string[];
-  estimate: number;
-  assigneeId?: string | null;
-}
 
 function makeTask(
   id: string,

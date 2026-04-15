@@ -24,13 +24,24 @@
 
       src = pkgs.lib.cleanSource ../..;
 
+      npmDeps = pkgs.fetchNpmDeps {
+        src = pkgs.lib.cleanSource ../..;
+        hash = "sha256-CJCrCUH9DWWAusnU7EQNoecmiQ3rN4RDDZhGWj5sxjE=";
+      };
+
+      npmInstallFlags = [];
+      npmRebuildFlags = [];
+      npmFlags = [];
+
       nativeBuildInputs = [
         pkgs.nodejs
+        pkgs.npmHooks.npmConfigHook
         pkgs.typescript
       ];
 
       buildPhase = ''
         ${setupTypes pkgs.stdenv.hostPlatform.system}
+        tsc --project tsconfig.lib.json
         tsc --project tsconfig.json
         node build.mjs
       '';
@@ -107,8 +118,11 @@ in
           src = pkgs.lib.cleanSource ../..;
           npmDeps = pkgs.fetchNpmDeps {
             src = pkgs.lib.cleanSource ../..;
-            hash = "sha256-9w/2E8n4j38deHEnT1jPFnJ4OiApfXPNrivUqhktYno=";
+            hash = "sha256-CJCrCUH9DWWAusnU7EQNoecmiQ3rN4RDDZhGWj5sxjE=";
           };
+          npmInstallFlags = [];
+          npmRebuildFlags = [];
+          npmFlags = [];
           nativeBuildInputs = [
             pkgs.nodejs
             pkgs.npmHooks.npmConfigHook
@@ -116,6 +130,7 @@ in
           ];
           buildPhase = ''
             ${setupTypes system}
+            tsc --project tsconfig.lib.json
             tsc --project tsconfig.json
             npx vitest run
           '';
