@@ -8,6 +8,10 @@ Dagny / OmniFocus integration
 
 Bidirectional syncing between Dagny and OmniFocus.
 
+## usage
+
+Read [the user docs](https://sellout.github.io/dagny-omnifocus-plugin/).
+
 ## scripts
 
 OmniFocus plugins can be accessed via the “Automation” menu, either in the menu bar or various context menus.

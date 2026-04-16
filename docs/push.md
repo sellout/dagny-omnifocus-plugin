@@ -40,8 +40,8 @@ OmniFocus hierarchy maps back to Dagny `dependsOn` edges:
 ```mermaid
 graph TD
   subgraph "Sequential parent"
-    direction LR
-    A --> B --> C
+    direction RL
+    C --> B --> A
   end
   subgraph "Parallel parent"
     D

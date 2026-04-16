@@ -53,7 +53,7 @@ OmniFocus uses parent/child trees, but Dagny uses a directed acyclic graph (DAG)
 Three tasks A, B, C all depend on the same prerequisite X:
 
 ```mermaid
-graph BT
+graph RL
   Y --> A --> X
   Y --> B --> X
   Y --> C --> X
@@ -94,7 +94,7 @@ Select your name from the project member list, or "None" to sync all tasks.
 When team filtering is active, the plugin syncs three categories of tasks:
 
 ```mermaid
-graph TD
+graph RL
   A["My tasks"] -->|"depends on"| B["Blockers\n(other people's tasks\nthat block mine)"]
   C["Blocked tasks\n(other people's tasks\nthat I block)"] -->|"depends on"| A
 ```

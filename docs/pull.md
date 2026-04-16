@@ -89,8 +89,9 @@ All tasks land inside the named OmniFocus project. The tree structure determines
 Tasks are grouped by their container task in Dagny. Each container becomes an OmniFocus project inside the target folder. Tasks without a container go into the default project (if configured).
 
 ```mermaid
-graph TD
+graph RL
   subgraph "OmniFocus Folder"
+    direction RL
     P1["Project: Feature A"]
     P2["Project: Feature B"]
     P1 --> T1[Task 1]
