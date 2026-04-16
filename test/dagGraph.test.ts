@@ -251,27 +251,29 @@ describe("dagToTree", () => {
       makeTask("X", ["A", "B"]),
     ];
     const tree = dagToTree(tasks, "conservative");
-    expect(tree).toHaveLength(1);
-    expect(tree[0].dagnyTaskId).toBe("X");
-    // X's children should be A and B (independent after transitive reduction)
-    expect(tree[0].sequential).toBe(false);
-    const childIds = tree[0].children.map(function (c: any) {
+    // D is a shared sub-dep of A and B → hoisted before X
+    // (default container is sequential, so lossless hoisting applies)
+    expect(tree).toHaveLength(2);
+    expect(tree[0].dagnyTaskId).toBe("D");
+    expect(tree[0].children).toHaveLength(0);
+    expect(tree[1].dagnyTaskId).toBe("X");
+    expect(tree[1].sequential).toBe(false);
+    const childIds = tree[1].children.map(function (c: any) {
       return c.dagnyTaskId;
     });
     expect(new Set(childIds)).toEqual(new Set(["A", "B"]));
-    // D can only appear once in the tree. The first child processed
-    // claims D; the second child has no unplaced deps left.
+    // All tasks appear exactly once
     const allIds = collectAllIds(tree);
     expect(allIds).toEqual(new Set(["X", "A", "B", "D"]));
-    // Exactly one of A or B should have D as a child
-    const aNode = tree[0].children.find(function (c: any) {
+    // A and B are both leaves (D hoisted out)
+    const aNode = tree[1].children.find(function (c: any) {
       return c.dagnyTaskId === "A";
     });
-    const bNode = tree[0].children.find(function (c: any) {
+    const bNode = tree[1].children.find(function (c: any) {
       return c.dagnyTaskId === "B";
     });
-    const totalDChildren = aNode.children.length + bNode.children.length;
-    expect(totalDChildren).toBe(1);
+    expect(aNode.children.length).toBe(0);
+    expect(bNode.children.length).toBe(0);
   });
 
   it("filters out tasks by excludeIds", () => {

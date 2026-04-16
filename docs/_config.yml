@@ -1,0 +1,10 @@
+title: Documentation for the Dagny OmniFocus plugin
+description: How to keep Dagny and OmniFocus in sync with each other..
+kramdown:
+  toc_levels: 2..6
+mermaid:
+  # Pick an available version from https://cdn.jsdelivr.net/npm/mermaid/
+  version: "11.14.0"
+plugins:
+  - jekyll-remote-theme
+remote_theme: just-the-docs/just-the-docs@v0.12.0

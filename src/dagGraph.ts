@@ -237,6 +237,34 @@ export function sortByPriority(
   return processed;
 }
 
+// Find sub-dependencies shared by 2+ of the given deps.
+export function findSharedSubDeps(
+  deps: string[],
+  dependsOn: Map<string, Set<string>>,
+): Set<string> {
+  const seen = new Set<string>();
+  const shared = new Set<string>();
+  for (const dep of deps) {
+    const visited = new Set<string>();
+    const stack = Array.from(dependsOn.get(dep) || []);
+    while (stack.length > 0) {
+      const curr = stack.pop()!;
+      if (visited.has(curr)) continue;
+      visited.add(curr);
+      if (seen.has(curr)) {
+        shared.add(curr);
+      }
+      for (const d of dependsOn.get(curr) || []) {
+        stack.push(d);
+      }
+    }
+    for (const v of visited) {
+      seen.add(v);
+    }
+  }
+  return shared;
+}
+
 export function dagToTree(
   tasks: DagnyTaskWithId[],
   mode: DependencyMode,
@@ -257,11 +285,29 @@ export function dagToTree(
     }
   }
 
-  const placed = new Set<string>();
+  // Build task lookup early so buildSubtree can use it for priority sorting
+  const taskMap = new Map<string, DagnyTaskWithId>();
+  for (const t of tasks) {
+    taskMap.set(t.taskId, t);
+  }
 
-  function buildSubtree(taskId: string): OFTreeNode {
+  const placed = new Set<string>();
+  // Track prereq IDs that have been built so we don't duplicate them.
+  const builtPrereqs = new Set<string>();
+
+  // buildSubtree returns the node plus any prerequisite task IDs that
+  // should ideally be placed before it in a sequential context.  The
+  // prereqs are pre-placed (in the `placed` set) but NOT yet built — the
+  // caller builds them at its own level when possible.
+  function buildSubtree(
+    taskId: string,
+    parentIsSequential: boolean,
+  ): { node: OFTreeNode; prereqs: string[] } {
     placed.add(taskId);
     const nf = noFlattenIds && noFlattenIds.has(taskId) ? true : undefined;
+    const useConservative =
+      mode === "conservative" ||
+      (noFlattenIds !== undefined && noFlattenIds.has(taskId));
 
     const deps = Array.from(reduced.get(taskId) || []).filter(function (d) {
       return !placed.has(d);
@@ -269,56 +315,146 @@ export function dagToTree(
 
     if (deps.length === 0) {
       return {
-        dagnyTaskId: taskId,
-        sequential: false,
-        children: [],
-        noFlatten: nf,
+        node: {
+          dagnyTaskId: taskId,
+          sequential: false,
+          children: [],
+          noFlatten: nf,
+        },
+        prereqs: [],
       };
     }
 
     const chain = findChain(deps, reduced);
 
     if (chain !== null) {
+      // Chain: sequential.  Integrate any child prereqs at this level.
       const childNodes: OFTreeNode[] = [];
       for (const depId of chain) {
         if (!placed.has(depId)) {
-          childNodes.push(buildSubtree(depId));
+          var r = buildSubtree(depId, true);
+          // Prereqs are pre-placed but not built — build at this level
+          for (const pId of r.prereqs) {
+            if (!builtPrereqs.has(pId)) {
+              builtPrereqs.add(pId);
+              childNodes.push(buildSubtree(pId, true).node);
+            }
+          }
+          childNodes.push(r.node);
         }
       }
       return {
-        dagnyTaskId: taskId,
-        sequential: true,
-        children: childNodes,
-        noFlatten: nf,
+        node: {
+          dagnyTaskId: taskId,
+          sequential: true,
+          children: childNodes,
+          noFlatten: nf,
+        },
+        prereqs: [],
       };
     } else if (areIndependent(deps, reduced)) {
-      const childNodes: OFTreeNode[] = [];
-      for (const depId of deps) {
-        if (!placed.has(depId)) {
-          childNodes.push(buildSubtree(depId));
+      const shared = findSharedSubDeps(deps, reduced);
+      // Remove shared sub-deps already placed elsewhere in the tree
+      for (const sid of Array.from(shared)) {
+        if (placed.has(sid)) {
+          shared.delete(sid);
         }
       }
-      return {
-        dagnyTaskId: taskId,
-        sequential: false,
-        children: childNodes,
-        noFlatten: nf,
-      };
+
+      if (shared.size > 0 && parentIsSequential) {
+        // Lossless: parent is sequential, so hoist shared sub-deps.
+        // Pre-place them so children don't claim them, then return
+        // their IDs as prereqs for the parent to build.
+        for (const sid of shared) {
+          placed.add(sid);
+        }
+        const childNodes: OFTreeNode[] = [];
+        for (const depId of deps) {
+          if (!placed.has(depId)) {
+            var r = buildSubtree(depId, false);
+            childNodes.push(r.node);
+          }
+        }
+        var sortedPrereqs = topologicalSort(Array.from(shared), reduced);
+        return {
+          node: {
+            dagnyTaskId: taskId,
+            sequential: false,
+            children: childNodes,
+            noFlatten: nf,
+          },
+          prereqs: sortedPrereqs,
+        };
+      } else if (shared.size > 0 && useConservative) {
+        // Lossy + conservative: build shared deps first, then original
+        // deps sorted by priority (highest first), all sequential.
+        const sharedNodes: OFTreeNode[] = [];
+        var sortedShared = topologicalSort(Array.from(shared), reduced);
+        for (const sid of sortedShared) {
+          if (!placed.has(sid)) {
+            sharedNodes.push(buildSubtree(sid, true).node);
+          }
+        }
+        const depNodes: OFTreeNode[] = [];
+        for (const depId of deps) {
+          if (!placed.has(depId)) {
+            depNodes.push(buildSubtree(depId, true).node);
+          }
+        }
+        depNodes.sort(function (a, b) {
+          return subtreePriority(b, taskMap) - subtreePriority(a, taskMap);
+        });
+        var childNodes2: OFTreeNode[] = [];
+        for (const n of sharedNodes) {
+          childNodes2.push(n);
+        }
+        for (const n of depNodes) {
+          childNodes2.push(n);
+        }
+        return {
+          node: {
+            dagnyTaskId: taskId,
+            sequential: true,
+            children: childNodes2,
+            noFlatten: nf,
+          },
+          prereqs: [],
+        };
+      } else {
+        // No shared sub-deps, or optimistic without sequential parent.
+        const childNodes: OFTreeNode[] = [];
+        for (const depId of deps) {
+          if (!placed.has(depId)) {
+            childNodes.push(buildSubtree(depId, false).node);
+          }
+        }
+        return {
+          node: {
+            dagnyTaskId: taskId,
+            sequential: false,
+            children: childNodes,
+            noFlatten: nf,
+          },
+          prereqs: [],
+        };
+      }
     } else {
-      const useConservative =
-        mode === "conservative" || (noFlattenIds && noFlattenIds.has(taskId));
+      // Mixed deps (typically unreachable after transitive reduction).
       const sorted = topologicalSort(deps, reduced);
       const childNodes: OFTreeNode[] = [];
       for (const depId of sorted) {
         if (!placed.has(depId)) {
-          childNodes.push(buildSubtree(depId));
+          childNodes.push(buildSubtree(depId, useConservative).node);
         }
       }
       return {
-        dagnyTaskId: taskId,
-        sequential: useConservative ? true : false,
-        children: childNodes,
-        noFlatten: nf,
+        node: {
+          dagnyTaskId: taskId,
+          sequential: useConservative ? true : false,
+          children: childNodes,
+          noFlatten: nf,
+        },
+        prereqs: [],
       };
     }
   }
@@ -330,31 +466,35 @@ export function dagToTree(
     }
   }
 
+  const parentSeq =
+    containerSequential !== undefined ? containerSequential : true;
+
   var result: OFTreeNode[] = [];
   for (const rootId of roots) {
     if (!placed.has(rootId)) {
-      result.push(buildSubtree(rootId));
+      var r = buildSubtree(rootId, parentSeq);
+      // Hoist prereqs to root level when container is sequential.
+      // Prereqs are pre-placed but not yet built — build them now.
+      for (const pId of r.prereqs) {
+        if (!builtPrereqs.has(pId)) {
+          builtPrereqs.add(pId);
+          result.push(buildSubtree(pId, parentSeq).node);
+        }
+      }
+      result.push(r.node);
     }
   }
 
   for (const id of dag.taskIds) {
     if (!placed.has(id)) {
-      result.push(buildSubtree(id));
+      result.push(buildSubtree(id, parentSeq).node);
     }
-  }
-
-  // Build task lookup for priority sorting
-  const taskMap = new Map<string, DagnyTaskWithId>();
-  for (const t of tasks) {
-    taskMap.set(t.taskId, t);
   }
 
   if (noFlattenIds) {
     result = pruneBlockedLeaves(result, noFlattenIds);
   }
 
-  const parentSeq =
-    containerSequential !== undefined ? containerSequential : true;
   const flattened = flattenTree(result, parentSeq);
   return sortByPriority(flattened, taskMap, parentSeq);
 }

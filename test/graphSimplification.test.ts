@@ -213,21 +213,18 @@ describe("tree conversion (DOT)", () => {
     );
   });
 
-  it("nests clusters for a diamond", () => {
+  it("hoists shared sub-dep in a diamond", () => {
     // X -> A, X -> B, A -> D, B -> D
-    // D gets placed under whichever of A/B is processed first
+    // D is shared by A and B → hoisted before X (container is sequential)
     expectTree(
       `digraph { X -> A; X -> B; A -> D; B -> D }`,
       `digraph {
+        D
         subgraph cluster_0 {
           label = "X [par]"
           X [shape=box]
+          A
           B
-          subgraph cluster_1 {
-            label = "A [seq]"
-            A [shape=box]
-            D
-          }
         }
       }`,
       "conservative",
@@ -257,5 +254,116 @@ describe("tree conversion (DOT)", () => {
 
   it("handles independent tasks as separate leaves", () => {
     expectTree(`digraph { A; B; C }`, `digraph { A; B; C }`, "conservative");
+  });
+});
+
+// ---- Conservative vs optimistic mode ----
+
+describe("dependency mode divergence (DOT)", () => {
+  it("both modes hoist when ancestor is sequential", () => {
+    // Z -> Y -> {A,B,C} -> X — lossless, both modes hoist X
+    const dot = `digraph { Z -> Y; Y -> A; Y -> B; Y -> C; A -> X; B -> X; C -> X }`;
+    const expected = `digraph {
+      subgraph cluster_0 {
+        label = "Z [seq]"
+        Z [shape=box]
+        X
+        subgraph cluster_1 {
+          label = "Y [par]"
+          Y [shape=box]
+          A
+          B
+          C
+        }
+        X -> Y [style=dotted]
+      }
+    }`;
+    expectTree(dot, expected, "conservative", false);
+    expectTree(dot, expected, "optimistic", false);
+  });
+
+  it("both modes hoist at root level (sequential container)", () => {
+    // Y -> {A,B,C} -> X — single root, sequential container
+    const dot = `digraph { Y -> A; Y -> B; Y -> C; A -> X; B -> X; C -> X }`;
+    const expected = `digraph {
+      X
+      subgraph cluster_0 {
+        label = "Y [par]"
+        Y [shape=box]
+        A
+        B
+        C
+      }
+    }`;
+    expectTree(dot, expected, "conservative");
+    expectTree(dot, expected, "optimistic");
+  });
+
+  it("conservative sequentializes when parent is parallel", () => {
+    // Y -> {A,B,C} -> X, containerSequential=false, no sequential ancestor
+    const dot = `digraph { Y -> A; Y -> B; Y -> C; A -> X; B -> X; C -> X }`;
+    expectTree(
+      dot,
+      `digraph {
+        subgraph cluster_0 {
+          label = "Y [seq]"
+          Y [shape=box]
+          X
+          A
+          B
+          C
+          X -> A [style=dotted]
+          A -> B [style=dotted]
+          B -> C [style=dotted]
+        }
+      }`,
+      "conservative",
+      false,
+    );
+  });
+
+  it("optimistic keeps parallel when parent is parallel (accepts loss)", () => {
+    // Same input, optimistic mode with parallel container
+    const dot = `digraph { Y -> A; Y -> B; Y -> C; A -> X; B -> X; C -> X }`;
+    expectTree(
+      dot,
+      `digraph {
+        subgraph cluster_0 {
+          label = "Y [par]"
+          Y [shape=box]
+          B
+          C
+          subgraph cluster_1 {
+            label = "A [seq]"
+            A [shape=box]
+            X
+          }
+        }
+      }`,
+      "optimistic",
+      false,
+    );
+  });
+
+  it("no shared sub-deps: modes agree", () => {
+    const dot = `digraph { Y -> A; Y -> B; A -> X; B -> Z }`;
+    const expected = `digraph {
+      subgraph cluster_0 {
+        label = "Y [par]"
+        Y [shape=box]
+        subgraph cluster_1 {
+          label = "A [seq]"
+          A [shape=box]
+          X
+        }
+        subgraph cluster_2 {
+          label = "B [seq]"
+          B [shape=box]
+          Z
+        }
+      }
+    }`;
+    expectTree(dot, expected, "conservative", false);
+    expectTree(dot, expected, "optimistic", false);
   });
 });
