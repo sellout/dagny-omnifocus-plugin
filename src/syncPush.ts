@@ -316,6 +316,12 @@
             var projMarker: DagnyMarker | null = lib.getDagnyMarker(proj.task);
             if (projMarker && lib.markerMatchesProject(projMarker, mapping)) {
               ofProjectMarkerIds.set(proj.name, projMarker.taskId);
+              // Ensure Dagny link is up to date on the project task.
+              lib.setDagnyMarker(
+                proj.task,
+                mapping.dagnyProjectId,
+                projMarker.taskId,
+              );
             }
           }
         }
@@ -480,7 +486,7 @@
     const patch: DagnyTaskUpdate = {};
 
     patch.title = ofTask.name;
-    patch.description = ofTask.note || "";
+    patch.description = lib.stripDagnyLinkLine(ofTask.note || "");
 
     const dagnyStatusId: string | null = lib.dagnyStatusFromOFTask(
       ofTask,
@@ -538,7 +544,7 @@
   ): DagnyTaskCreate {
     const dagnyTask: DagnyTaskCreate = {
       title: ofTask.name,
-      description: ofTask.note || "",
+      description: lib.stripDagnyLinkLine(ofTask.note || ""),
       dependsOn: [],
       tags: collectDagnyTags(
         ofTask,

@@ -247,27 +247,75 @@
     return lib.fetch("GET", "/users/me");
   };
 
+  // ---- GitHub link API ----
+
+  lib.getTaskGitHubLinks = function (
+    projectId: string,
+    taskId: string,
+  ): Promise<TaskGitHubLink[]> {
+    return lib.fetch("GET", "/tasks/" + projectId + "/" + taskId + "/github");
+  };
+
+  lib.buildGitHubUrl = function (link: TaskGitHubLink): string {
+    const type = link.itemType === "pull_request" ? "pull" : "issues";
+    return (
+      "https://github.com/" +
+      link.repoOwner +
+      "/" +
+      link.repoName +
+      "/" +
+      type +
+      "/" +
+      link.itemNumber
+    );
+  };
+
+  lib.buildGitHubDisplayText = function (link: TaskGitHubLink): string {
+    return link.repoOwner + "/" + link.repoName + "#" + link.itemNumber;
+  };
+
   // ---- Sync identity helpers ----
 
-  const DAGNY_ATTACHMENT_NAME = "dagny.json";
+  const DAGNY_LINK_LINE_RE = /^❮❮Dagny[^❯]*❯❯$/m;
+
+  lib.getDagnyWebBaseUrl = function (): string {
+    return lib.getBaseUrl().replace(/\/api$/, "");
+  };
+
+  lib.buildDagnyUrl = function (projectId: string, taskId: string): string {
+    return (
+      lib.getDagnyWebBaseUrl() + "/projects/" + projectId + "?task=" + taskId
+    );
+  };
+
+  lib.parseDagnyUrl = function (url: string): DagnyMarker | null {
+    const webBase = lib.getDagnyWebBaseUrl();
+    if (!url.startsWith(webBase + "/projects/")) return null;
+    const rest = url.substring((webBase + "/projects/").length);
+    const qIdx = rest.indexOf("?task=");
+    if (qIdx < 0) return null;
+    const projectId = rest.substring(0, qIdx);
+    const taskId = rest.substring(qIdx + 6);
+    if (!projectId || !taskId) return null;
+    return { projectId: projectId, taskId: taskId };
+  };
 
   lib.getDagnyMarker = function (ofTask: Task): DagnyMarker | null {
-    for (var i = 0; i < ofTask.attachments.length; i++) {
-      const att = ofTask.attachments[i];
-      if (
-        (att.preferredFilename === DAGNY_ATTACHMENT_NAME ||
-          att.filename === DAGNY_ATTACHMENT_NAME) &&
-        att.contents
-      ) {
-        try {
-          const data = JSON.parse(att.contents.toString());
-          if (data.projectId && data.taskId) {
-            return { projectId: data.projectId, taskId: data.taskId };
-          }
-        } catch (e) {
-          // Malformed attachment — ignore
+    try {
+      const runs: Text[] = ofTask.noteText.attributeRuns;
+      for (var i = runs.length - 1; i >= 0; i--) {
+        // Only accept runs whose text is "Dagny" — the word we apply
+        // the link to in setDagnyMarker.  This filters out auto-linked
+        // Dagny URLs that appear as literal text in the description.
+        if (runs[i].string !== "Dagny") continue;
+        const linkUrl = runs[i].style.link;
+        if (linkUrl) {
+          const marker = lib.parseDagnyUrl(linkUrl.string);
+          if (marker) return marker;
         }
       }
+    } catch (e) {
+      // noteText may not be available
     }
     return null;
   };
@@ -279,30 +327,79 @@
     return marker.projectId === mapping.dagnyProjectId;
   };
 
+  lib.stripDagnyLinkLine = function (note: string): string {
+    return note.replace(/\n?\n❮❮Dagny[^❯]*❯❯$/, "");
+  };
+
   lib.setDagnyMarker = function (
     ofTask: Task,
     dagnyProjectId: string,
     dagnyTaskId: string,
+    githubLinks?: TaskGitHubLink[],
   ): void {
-    // Remove existing dagny.json attachment if present
-    for (var i = ofTask.attachments.length - 1; i >= 0; i--) {
-      const att = ofTask.attachments[i];
-      if (
-        att.preferredFilename === DAGNY_ATTACHMENT_NAME ||
-        att.filename === DAGNY_ATTACHMENT_NAME
-      ) {
-        ofTask.removeAttachmentAtIndex(i);
+    // 1. Build the link line text.
+    var linkLine = "❮❮Dagny";
+    if (githubLinks && githubLinks.length > 0) {
+      linkLine += " → GitHub: ";
+      const parts: string[] = [];
+      for (var g = 0; g < githubLinks.length; g++) {
+        parts.push(lib.buildGitHubDisplayText(githubLinks[g]));
       }
+      linkLine += parts.join(", ");
     }
-    const json = JSON.stringify({
-      projectId: dagnyProjectId,
-      taskId: dagnyTaskId,
-    });
-    const wrapper = FileWrapper.withContents(
-      DAGNY_ATTACHMENT_NAME,
-      Data.fromString(json),
-    );
-    ofTask.addAttachment(wrapper);
+    linkLine += "❯❯";
+
+    // 2. Strip old link line, rebuild note, and apply rich text styles.
+    try {
+      const noteText = ofTask.noteText;
+
+      // Read from noteText.string to avoid URL annotations that
+      // ofTask.note includes when serializing rich text hyperlinks.
+      const currentNote = noteText.string || "";
+      const stripped = lib.stripDagnyLinkLine(currentNote);
+      var fullNote = stripped.length > 0
+        ? stripped + "\n\n" + linkLine
+        : linkLine;
+      noteText.string = fullNote;
+
+      // Find the link line at the end of the note.
+      const linkLineRange = noteText.find(
+        linkLine,
+        [Text.FindOption.Backwards],
+        null,
+      );
+      if (!linkLineRange) return;
+
+      // "Dagny" hyperlink.
+      const dagnyRange = noteText.find("Dagny", null, linkLineRange);
+      if (dagnyRange) {
+        const dagnyUrl = lib.buildDagnyUrl(dagnyProjectId, dagnyTaskId);
+        const dagnyStyle = noteText.styleForRange(dagnyRange);
+        dagnyStyle.set(Style.Attribute.Link, URL.fromString(dagnyUrl));
+      }
+
+      // GitHub hyperlinks.
+      if (githubLinks && githubLinks.length > 0) {
+        for (var g = 0; g < githubLinks.length; g++) {
+          const displayText = lib.buildGitHubDisplayText(githubLinks[g]);
+          const ghRange = noteText.find(displayText, null, linkLineRange);
+          if (ghRange) {
+            const ghStyle = noteText.styleForRange(ghRange);
+            ghStyle.set(
+              Style.Attribute.Link,
+              URL.fromString(lib.buildGitHubUrl(githubLinks[g])),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      // noteText not available — fall back to plain-text note.
+      const currentNote = ofTask.note || "";
+      const stripped = lib.stripDagnyLinkLine(currentNote);
+      ofTask.note = stripped.length > 0
+        ? stripped + "\n\n" + linkLine
+        : linkLine;
+    }
   };
 
   // ---- Tag helpers ----
@@ -529,45 +626,6 @@
 
   lib.clearCredentials = function (): void {
     credentials.remove(SERVICE_NAME);
-  };
-
-  // ---- OF container description tags ----
-
-  const ofTagPattern = /\[OmniFocus:[^\]]*\]/;
-
-  lib.isOFProjectTask = function (dt: DagnyTaskWithId): boolean {
-    return dt.description.indexOf("[OmniFocus:project:") >= 0;
-  };
-
-  lib.isOFFolderTask = function (dt: DagnyTaskWithId): boolean {
-    return dt.description.indexOf("[OmniFocus:folder:") >= 0;
-  };
-
-  lib.isOFContainerTask = function (dt: DagnyTaskWithId): boolean {
-    return lib.isOFProjectTask(dt) || lib.isOFFolderTask(dt);
-  };
-
-  lib.getOFProjectName = function (dt: DagnyTaskWithId): string | null {
-    const match = dt.description.match(/\[OmniFocus:project:([^\]]*)\]/);
-    return match ? match[1] : null;
-  };
-
-  lib.getOFFolderName = function (dt: DagnyTaskWithId): string | null {
-    const match = dt.description.match(/\[OmniFocus:folder:([^\]]*)\]/);
-    return match ? match[1] : null;
-  };
-
-  lib.setOFDescriptionTag = function (
-    description: string,
-    tag: string,
-  ): string {
-    if (ofTagPattern.test(description)) {
-      return description.replace(ofTagPattern, tag);
-    }
-    if (description.length > 0) {
-      return description + "\n" + tag;
-    }
-    return tag;
   };
 
   return lib;

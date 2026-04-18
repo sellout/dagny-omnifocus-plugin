@@ -93,6 +93,14 @@ interface DagnyMarker {
   taskId: string;
 }
 
+interface TaskGitHubLink {
+  repoId: string;
+  repoOwner: string;
+  repoName: string;
+  itemType: string;
+  itemNumber: number;
+}
+
 interface OFTarget {
   tasks: Task[];
   container: Project | null;

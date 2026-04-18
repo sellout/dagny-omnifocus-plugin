@@ -72,10 +72,10 @@ Project (sequential)
 
 When there's no sequential ancestor to hoist into, the modes differ:
 
-| Mode         | Result                     | Trade-off                          |
-| ------------ | -------------------------- | ---------------------------------- |
-| Conservative | Y (sequential): X, A, B, C | C waits for B unnecessarily, which waits for A unnecessarily        |
-| Optimistic   | Y (parallel): A→X, B, C    | B and C lose their dependency on X |
+| Mode         | Result                     | Trade-off                                                    |
+| ------------ | -------------------------- | ------------------------------------------------------------ |
+| Conservative | Y (sequential): X, A, B, C | C waits for B unnecessarily, which waits for A unnecessarily |
+| Optimistic   | Y (parallel): A→X, B, C    | B and C lose their dependency on X                           |
 
 ### Minutes per estimate unit
 

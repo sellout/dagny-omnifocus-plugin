@@ -22,7 +22,7 @@ flowchart TD
 
 ### 1. Scan for markers
 
-The plugin scans all OmniFocus tasks in the mapped target (project, folder, or everything) looking for `dagny.json` markers from previous syncs.
+The plugin scans all OmniFocus tasks in the mapped target (project, folder, or everything) looking for Dagny link lines in task notes.
 
 ### 2. Walk the hierarchy
 
@@ -30,8 +30,8 @@ The plugin walks the OmniFocus task tree, processing siblings together to determ
 
 ### 3. Update or create tasks
 
-- **Marked tasks** -- the plugin computes a diff and sends a PATCH to update the Dagny task.
-- **Unmarked tasks** -- treated as new. The plugin creates the task in Dagny and attaches a marker to the OmniFocus task for future syncs.
+- **Marked tasks** -- the plugin computes a diff and sends a PATCH to update the Dagny task. The Dagny link line is stripped from the note before sending the description.
+- **Unmarked tasks** -- treated as new. The plugin creates the task in Dagny and adds a Dagny link line to the OmniFocus task's note for future syncs.
 
 ### 4. Compute dependencies
 
@@ -68,7 +68,7 @@ Folders are synced deepest-first so that nested folder structures resolve correc
 | OmniFocus                   | Dagny        | Notes                                                                           |
 | --------------------------- | ------------ | ------------------------------------------------------------------------------- |
 | Name                        | Title        |                                                                                 |
-| Note                        | Description  |                                                                                 |
+| Note                        | Description  | The Dagny link line at the end is stripped before sending                       |
 | Estimated minutes           | Estimate     | Divided by the estimate multiplier                                              |
 | Flagged                     | Value        | Flagged = value 1, unflagged = no value                                         |
 | Action + status tag         | Status       | See [Configuration](configuration.md#status-mapping)                            |

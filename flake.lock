@@ -89,11 +89,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1774468679,
-        "narHash": "sha256-6wWxGbyNAOf52n7mc+pBS3GEkufSH9HOzJSYxzpScBI=",
+        "lastModified": 1776350147,
+        "narHash": "sha256-ZlgrVgcVjyfHX83dla8V+B/yDzvnVuXXAf1kAG/rJyo=",
         "owner": "sellout",
         "repo": "flaky",
-        "rev": "3dad56c080a299de90e12c2156e24a9b34143d8d",
+        "rev": "8dcf6e0a70344b612ec1aeb6048a86a8deb22b95",
         "type": "github"
       },
       "original": {
@@ -285,11 +285,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1775796891,
-        "narHash": "sha256-vC4kPhTgyeR+4UxV/QodoFv9GlQ+p9KRpIjvLlY8q+A=",
+        "lastModified": 1776610445,
+        "narHash": "sha256-Zx9Vgd5GwabnMpCq9sQKXO8PkTgbloSk6s98S/YAuzA=",
         "owner": "sellout",
         "repo": "omni-automation-types",
-        "rev": "bcd828bea374c01b4808d175ffa9d169ff42b404",
+        "rev": "32993106d511ac188579bf93e308d624644a0b5a",
         "type": "github"
       },
       "original": {

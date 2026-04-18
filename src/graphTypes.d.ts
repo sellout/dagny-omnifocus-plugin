@@ -14,8 +14,6 @@ interface DagnyTaskWithId {
   effectiveValue?: number | null;
   assigneeId?: string | null;
   collaboratorIds?: string[];
-  hasGitHubLink?: boolean;
-  hasPR?: boolean;
 }
 
 // Tree structure computed from Dagny's dependency DAG,

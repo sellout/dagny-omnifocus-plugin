@@ -46,7 +46,7 @@ Dagny represents task dependencies as a directed acyclic graph (DAG), but OmniFo
 
 ### 4. Match against existing OmniFocus tasks
 
-Each OmniFocus task that was previously synced has a hidden `dagny.json` marker identifying its Dagny project and task ID. The plugin uses these markers to match incoming tasks with existing OmniFocus tasks.
+Each synced OmniFocus task has a Dagny link at the end of its note (e.g., `❮❮Dagny❯❯` or `❮❮Dagny → GitHub: owner/repo#11❯❯`). The plugin reads the hyperlink URL to identify which Dagny task each OmniFocus task corresponds to. If no link is found, the plugin falls back to matching by task title.
 
 ### 5. Create or update tasks
 
@@ -60,7 +60,7 @@ For each task in the computed tree:
 | Dagny        | OmniFocus           | Notes                                                                    |
 | ------------ | ------------------- | ------------------------------------------------------------------------ |
 | Title        | Name                |                                                                          |
-| Description  | Note                |                                                                          |
+| Description  | Note                | A Dagny link is appended at the end of the note; see below               |
 | Estimate     | Estimated minutes   | Multiplied by the estimate multiplier                                    |
 | Value > 0    | Flagged             | Based on the task's own value, not inherited priority                    |
 | Status       | Action + status tag | See [Configuration](configuration.md#status-mapping)                     |
@@ -77,6 +77,21 @@ During pull, the plugin manages several tag families:
 - **`waiting on:` tags** -- added for tasks assigned to other people. In team filtering mode, blockers get `waiting on:{username}` tags.
 
 Tags from previous syncs that no longer apply are removed.
+
+## Dagny link
+
+After syncing, each OmniFocus task's note ends with a clickable link line:
+
+```
+❮❮Dagny → GitHub: owner/repo#11❯❯
+```
+
+- **Dagny** links to the task in Dagny's web interface.
+- **GitHub: owner/repo#11** links to the associated GitHub issue or pull request (if one exists). Multiple GitHub links are comma-separated.
+
+If the task has no GitHub link, the line is simply `❮❮Dagny❯❯`.
+
+The link line is separated from the description by a blank line. You can edit the description freely; the link line is updated in place on each sync.
 
 ## Hierarchy mapping
 

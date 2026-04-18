@@ -17,6 +17,7 @@
     lib: any,
     counters: { created: number; updated: number },
     taskCategories: Map<string, TaskCategory> | null,
+    githubLinksMap: Map<string, TaskGitHubLink[]>,
   ): void {
     for (var i = 0; i < nodes.length; i++) {
       const node = nodes[i];
@@ -28,7 +29,6 @@
 
       if (isNew) {
         ofTask = new Task(dt.title, parentPosition);
-        lib.setDagnyMarker(ofTask, mapping.dagnyProjectId, dt.taskId);
         counters.created++;
       } else {
         moveTasks([ofTask!], parentPosition);
@@ -48,6 +48,7 @@
         myUserId,
         lib,
         category,
+        githubLinksMap,
       );
 
       if (node.children.length > 0) {
@@ -67,6 +68,7 @@
           lib,
           counters,
           taskCategories,
+          githubLinksMap,
         );
       }
     }
@@ -81,12 +83,14 @@
     myUserId: string,
     lib: any,
     taskCategory: TaskCategory | null,
+    githubLinksMap: Map<string, TaskGitHubLink[]>,
   ): void {
     ofTask.name = dt.title;
     ofTask.note = dt.description || "";
 
-    // Ensure attachment marker is up to date
-    lib.setDagnyMarker(ofTask, mapping.dagnyProjectId, dt.taskId);
+    // Set Dagny link.
+    const ghLinks = githubLinksMap.get(dt.taskId) || [];
+    lib.setDagnyMarker(ofTask, mapping.dagnyProjectId, dt.taskId, ghLinks);
 
     if (dt.estimate != null) {
       const mult = mapping.estimateMultiplier || 1;
@@ -245,9 +249,40 @@
           }
         }
 
+        // Title-based fallback: match unlinked OF tasks by title,
+        // only if no other OF task already claims that Dagny task ID.
+        const claimedIds = new Set<string>(existingIndex.keys());
+        for (const ofTask of tasksToScan) {
+          if (lib.getDagnyMarker(ofTask)) continue;
+          for (const dt of activeTasks) {
+            if (claimedIds.has(dt.taskId)) continue;
+            if (ofTask.name === dt.title) {
+              existingIndex.set(dt.taskId, ofTask);
+              claimedIds.add(dt.taskId);
+              break;
+            }
+          }
+        }
+
         const dagnyTaskMap = new Map<string, DagnyTaskWithId>();
         for (const dt of activeTasks) {
           dagnyTaskMap.set(dt.taskId, dt);
+        }
+
+        // Batch-fetch GitHub links for all active tasks.
+        const githubLinksMap = new Map<string, TaskGitHubLink[]>();
+        for (const dt of activeTasks) {
+          try {
+            const links: TaskGitHubLink[] = await lib.getTaskGitHubLinks(
+              mapping.dagnyProjectId,
+              dt.taskId,
+            );
+            if (links && links.length > 0) {
+              githubLinksMap.set(dt.taskId, links);
+            }
+          } catch (e) {
+            // Non-fatal: skip GitHub links for this task.
+          }
         }
 
         // Build set of container task IDs to exclude from the tree.
@@ -268,6 +303,14 @@
             if (marker && lib.markerMatchesProject(marker, mapping)) {
               containerIds.add(marker.taskId);
               containerProjectMap.set(marker.taskId, proj.name);
+              // Ensure Dagny link is up to date on the project task.
+              const ghLinks = githubLinksMap.get(marker.taskId) || [];
+              lib.setDagnyMarker(
+                proj.task,
+                mapping.dagnyProjectId,
+                marker.taskId,
+                ghLinks,
+              );
             }
           }
 
@@ -280,30 +323,6 @@
               if (dt.title === folder.name && !containerIds.has(dt.taskId)) {
                 containerIds.add(dt.taskId);
                 containerFolderMap.set(dt.taskId, folder.name);
-              }
-            }
-          }
-
-          // Also detect legacy [OmniFocus:] description tags and
-          // clean them up while adding to containerIds.
-          for (const dt of activeTasks) {
-            if (lib.isOFContainerTask(dt)) {
-              containerIds.add(dt.taskId);
-              if (lib.isOFProjectTask(dt)) {
-                const projName = lib.getOFProjectName(dt);
-                if (projName) {
-                  containerProjectMap.set(dt.taskId, projName);
-                }
-              }
-              // Remove legacy tag from Dagny.
-              const cleanDesc = dt.description
-                .replace(/\[OmniFocus:[^\]]*\]/, "")
-                .trim();
-              if (cleanDesc !== dt.description) {
-                await lib.updateTask(mapping.dagnyProjectId, dt.taskId, {
-                  description: cleanDesc,
-                });
-                dt.description = cleanDesc;
               }
             }
           }
@@ -340,6 +359,7 @@
             lib,
             counters,
             taskCategories,
+            githubLinksMap,
           );
         } else {
           // folder / everything: roots must go into OF projects.
@@ -443,25 +463,69 @@
               lib,
               counters,
               taskCategories,
+              githubLinksMap,
             );
           }
 
-          // Create new OF projects for unclaimed roots.
+          // Create new OF projects for unclaimed roots, or update
+          // existing tasks that were already matched by marker/title.
           for (const root of unclaimed) {
             const dt = dagnyTaskMap.get(root.dagnyTaskId);
             if (!dt) continue;
+
+            const rootCategory = taskCategories
+              ? taskCategories.get(root.dagnyTaskId) || null
+              : null;
+
+            var existingTask = existingIndex.get(dt.taskId);
+            if (existingTask) {
+              // Already matched (e.g. user moved a project inside
+              // another project, converting it to a task) — update
+              // in place without creating a new project.
+              updateTaskFields(
+                existingTask,
+                dt,
+                mapping,
+                projStatusMap,
+                memberMap,
+                myUserId,
+                lib,
+                rootCategory,
+                githubLinksMap,
+              );
+              counters.updated++;
+
+              if (root.children.length > 0) {
+                existingTask.sequential = root.sequential;
+                var flatChildren = flattenTree(
+                  root.children,
+                  root.sequential,
+                );
+                applyTree(
+                  flatChildren,
+                  existingTask.ending,
+                  dagnyTaskMap,
+                  existingIndex,
+                  mapping,
+                  projStatusMap,
+                  memberMap,
+                  myUserId,
+                  lib,
+                  counters,
+                  taskCategories,
+                  githubLinksMap,
+                );
+              }
+              continue;
+            }
 
             var ofProj: Project = new Project(
               dt.title,
               projectPosition(dt.title),
             );
             ofProj.sequential = root.sequential;
-            lib.setDagnyMarker(ofProj.task, mapping.dagnyProjectId, dt.taskId);
             existingIndex.set(dt.taskId, ofProj.task);
 
-            const rootCategory = taskCategories
-              ? taskCategories.get(root.dagnyTaskId) || null
-              : null;
             updateTaskFields(
               ofProj.task,
               dt,
@@ -471,6 +535,7 @@
               myUserId,
               lib,
               rootCategory,
+              githubLinksMap,
             );
             counters.created++;
 
@@ -488,6 +553,7 @@
                 lib,
                 counters,
                 taskCategories,
+                githubLinksMap,
               );
             }
           }
