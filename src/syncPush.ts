@@ -309,10 +309,8 @@
               var dagnyId = ofToDagnyId.get(kids[k].id.primaryKey);
               if (dagnyId) childDagnyIds.push(dagnyId);
             }
-            if (childDagnyIds.length > 0) {
-              ofProjectChildren.set(proj.name, childDagnyIds);
-              ofProjectSequential.set(proj.name, proj.sequential);
-            }
+            ofProjectChildren.set(proj.name, childDagnyIds);
+            ofProjectSequential.set(proj.name, proj.sequential);
             // Track Dagny marker on project task for container lookup.
             var projMarker: DagnyMarker | null = lib.getDagnyMarker(proj.task);
             if (projMarker && lib.markerMatchesProject(projMarker, mapping)) {
@@ -856,8 +854,6 @@
         if (folderId) deps.push(folderId);
       }
 
-      if (deps.length === 0) continue;
-
       let existingFolderTask: DagnyTaskWithId | null = null;
       for (const [id, dt] of dagnyIndex) {
         if (dt.title === folder.name) {
@@ -876,7 +872,7 @@
       } else {
         const defaultStatus: StatusMappingEntry | undefined = projStatusMap
           ? projStatusMap.mappings.find(
-              (m: StatusMappingEntry) => m.ofAction === "active" && m.isDefault,
+              (m: StatusMappingEntry) => m.ofAction === "folder" && m.isDefault,
             )
           : undefined;
 

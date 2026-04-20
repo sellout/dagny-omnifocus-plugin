@@ -159,8 +159,8 @@
         "OmniFocus Folder",
         "Everything",
       ];
-      const ofActions = ["active", "completed", "dropped"];
-      const ofLabels = ["Active", "Completed", "Dropped"];
+      const ofActions = ["active", "completed", "dropped", "folder"];
+      const ofLabels = ["Active", "Completed", "Dropped", "Folder"];
 
       const settingsForm = new Form();
       settingsForm.addField(
@@ -303,7 +303,7 @@
           settingsForm.addField(
             new Form.Field.Checkbox(
               "default_" + j,
-              ds.name + " \u2014 Default for its OF action?",
+              "Default for its OF action?",
               existingEntry ? existingEntry.isDefault : false,
             ),
             null,

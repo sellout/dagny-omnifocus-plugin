@@ -57,7 +57,7 @@ interface UserProfile {
 // ---- Plugin Configuration ----
 
 type OFTargetType = "project" | "folder" | "everything";
-type OFAction = "active" | "completed" | "dropped";
+type OFAction = "active" | "completed" | "dropped" | "folder";
 
 interface ProjectMapping {
   dagnyProjectId: string;

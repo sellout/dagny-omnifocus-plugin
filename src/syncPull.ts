@@ -391,6 +391,22 @@
           }
         }
 
+        // Status-based folder detection: tasks whose Dagny status maps
+        // to "folder" are treated as OF folders.
+        if (projStatusMap) {
+          for (const dt of activeTasks) {
+            if (containerIds.has(dt.taskId)) continue;
+            if (!dt.statusId) continue;
+            const entry = projStatusMap.mappings.find(
+              (m: StatusMappingEntry) => m.dagnyStatusId === dt.statusId,
+            );
+            if (entry && entry.ofAction === "folder") {
+              containerIds.add(dt.taskId);
+              containerFolderMap.set(dt.taskId, dt.title);
+            }
+          }
+        }
+
         const mode: DependencyMode = mapping.dependencyMode || "conservative";
         const containerSequential =
           target.type === "project" && target.container
@@ -463,10 +479,13 @@
             }
           }
 
-          // Map project name → parent folder name, by checking which
-          // folder container task has the project container in its
-          // dependsOn.
+          // Map project/root name → parent folder name, and
+          // child folder name → parent folder name.
+          // A folder container's dependsOn may reference a project
+          // container, another folder container, or a regular task
+          // that will become an unclaimed root project.
           const projectParentFolder = new Map<string, string>();
+          const folderParentFolder = new Map<string, string>();
           for (const dt of dagnyTasks) {
             const folderName = containerFolderMap.get(dt.taskId);
             if (!folderName) continue;
@@ -474,6 +493,18 @@
               const projName = containerProjectMap.get(depId);
               if (projName) {
                 projectParentFolder.set(projName, folderName);
+              } else {
+                const childFolderName = containerFolderMap.get(depId);
+                if (childFolderName) {
+                  folderParentFolder.set(childFolderName, folderName);
+                } else {
+                  // depId is a regular task that will become a root
+                  // project — use its title as the project name.
+                  const depTask = dagnyTaskMap.get(depId);
+                  if (depTask) {
+                    projectParentFolder.set(depTask.title, folderName);
+                  }
+                }
               }
             }
           }
@@ -504,12 +535,25 @@
             return null;
           }
 
+          // Ensure an OF folder exists for a given name, creating it
+          // if necessary (e.g. for status-based folder containers).
+          function ensureOFFolder(name: string): Folder {
+            var existing = findOFFolder(name);
+            if (existing) return existing;
+            var parentName = folderParentFolder.get(name);
+            var position: Folder.ChildInsertionLocation | null = parentName
+              ? ensureOFFolder(parentName).ending
+              : defaultProjectPosition || null;
+            var newFolder = new Folder(name, position);
+            ofFolders.push(newFolder);
+            return newFolder;
+          }
+
           // Position for creating a project, respecting folder nesting.
           function projectPosition(projName: string): any {
             const parentName = projectParentFolder.get(projName);
             if (parentName) {
-              const parentFolder = findOFFolder(parentName);
-              if (parentFolder) return parentFolder.ending;
+              return ensureOFFolder(parentName).ending;
             }
             return defaultProjectPosition;
           }
@@ -519,6 +563,14 @@
             var ofProj: Project =
               findOFProject(projName) ||
               new Project(projName, projectPosition(projName));
+            // Move existing project into its designated folder if needed.
+            const parentFolderName = projectParentFolder.get(projName);
+            if (parentFolderName) {
+              const parentFolder = ensureOFFolder(parentFolderName);
+              if (ofProj.parentFolder !== parentFolder) {
+                moveSections([ofProj], parentFolder.ending);
+              }
+            }
             if (roots.length > 1) {
               ofProj.sequential = false;
             }
