@@ -115,37 +115,38 @@
                 mapping,
               );
               if (patch) {
+                const p = patch;
                 try {
                   await lib.updateTask(
                     mapping.dagnyProjectId,
                     marker.taskId,
-                    patch,
+                    p,
                   );
                 } catch (e: any) {
                   if (e instanceof DagnyAPIError) {
                     var recovered = await retryWithoutStaleStatus(
                       e,
                       mapping.dagnyProjectId,
-                      patch.statusId,
+                      p.statusId,
                       async function () {
-                        delete patch.statusId;
+                        delete p.statusId;
                         await lib.updateTask(
                           mapping.dagnyProjectId,
                           marker!.taskId,
-                          patch,
+                          p,
                         );
                       },
                     );
                     if (!recovered) {
                       if (
-                        patch.statusId &&
+                        p.statusId &&
                         e.message.indexOf("Status transition not allowed") >= 0
                       ) {
-                        var statusName = patch.statusId;
+                        var statusName = p.statusId;
                         if (projStatusMap) {
                           var entry = projStatusMap.mappings.find(
                             (m: StatusMappingEntry) =>
-                              m.dagnyStatusId === patch.statusId,
+                              m.dagnyStatusId === p.statusId,
                           );
                           if (entry) statusName = entry.dagnyStatusName;
                         }
@@ -482,7 +483,7 @@
     myUserId: string,
     estimateMultiplier: number,
     mapping: ProjectMapping,
-  ): DagnyTaskUpdate {
+  ): DagnyTaskUpdate | null {
     const patch: DagnyTaskUpdate = {};
 
     patch.title = ofTask.name;
@@ -530,6 +531,65 @@
       patch.assigneeId = assignee;
     }
 
+    if (existingDagnyTask) {
+      return filterUnchangedFields(patch, existingDagnyTask);
+    }
+    return patch;
+  }
+
+  function arraysEqual(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false;
+    var sortedA = a.slice().sort();
+    var sortedB = b.slice().sort();
+    for (var i = 0; i < sortedA.length; i++) {
+      if (sortedA[i] !== sortedB[i]) return false;
+    }
+    return true;
+  }
+
+  function filterUnchangedFields(
+    patch: DagnyTaskUpdate,
+    existing: DagnyTaskWithId,
+  ): DagnyTaskUpdate | null {
+    if (patch.title !== undefined && patch.title === existing.title) {
+      delete patch.title;
+    }
+    if (
+      patch.description !== undefined &&
+      patch.description === existing.description
+    ) {
+      delete patch.description;
+    }
+    if (patch.statusId !== undefined && patch.statusId === existing.statusId) {
+      delete patch.statusId;
+    }
+    if (
+      patch.tags !== undefined &&
+      arraysEqual(patch.tags, existing.tags || [])
+    ) {
+      delete patch.tags;
+    }
+    if (patch.estimate !== undefined && patch.estimate === existing.estimate) {
+      delete patch.estimate;
+    }
+    if ("value" in patch) {
+      var patchVal = patch.value ?? null;
+      var existVal = existing.value ?? null;
+      if (patchVal === existVal) {
+        delete patch.value;
+      }
+    }
+    if (patch.assigneeId !== undefined) {
+      var patchAssignee = patch.assigneeId ?? null;
+      var existAssignee = existing.assigneeId ?? null;
+      if (patchAssignee === existAssignee) {
+        delete patch.assigneeId;
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return null;
+    }
     return patch;
   }
 
