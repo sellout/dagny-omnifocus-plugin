@@ -343,6 +343,94 @@
           }
         }
 
+        // ---- Optimistic mode: push OF-implied edges to Dagny ----
+        const pushMode: DependencyMode =
+          mapping.dependencyMode || "conservative";
+        if (pushMode === "optimistic") {
+          // Extract edges implied by the OF hierarchy for linked tasks.
+          const ofEdges = new Map<string, Set<string>>();
+          for (const [ofKey, dagnyId] of ofToDagnyId) {
+            // Find the OF task for this key
+            var foundTask: Task | null = null;
+            for (const ofTask of tasksToScan) {
+              if (ofTask.id.primaryKey === ofKey) {
+                foundTask = ofTask;
+                break;
+              }
+            }
+            if (!foundTask) continue;
+
+            var deps = new Set<string>();
+
+            // Group → depends on children
+            if (foundTask.hasChildren) {
+              var children = foundTask.children;
+              if (foundTask.sequential && children.length > 0) {
+                var lastId = ofToDagnyId.get(
+                  children[children.length - 1].id.primaryKey,
+                );
+                if (lastId) deps.add(lastId);
+              } else {
+                for (var c = 0; c < children.length; c++) {
+                  var childId = ofToDagnyId.get(children[c].id.primaryKey);
+                  if (childId) deps.add(childId);
+                }
+              }
+            }
+
+            // Sequential sibling → depends on previous
+            var parent = foundTask.parent;
+            if (parent) {
+              var siblings = parent.children;
+              if (parent.sequential) {
+                for (var si = 1; si < siblings.length; si++) {
+                  if (
+                    siblings[si].id.primaryKey === foundTask.id.primaryKey
+                  ) {
+                    var prevId = ofToDagnyId.get(
+                      siblings[si - 1].id.primaryKey,
+                    );
+                    if (prevId) deps.add(prevId);
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (deps.size > 0) {
+              ofEdges.set(dagnyId, deps);
+            }
+          }
+
+          // Build labeled graph and push OF-only edges for existing tasks.
+          const labeledDag = buildLabeledDag(
+            dagnyTasks,
+            ofEdges,
+          );
+          for (const [taskId, edgeMap] of labeledDag.dependsOn) {
+            var existing = dagnyIndex.get(taskId);
+            if (!existing) continue;
+            var ofOnlyDeps: string[] = [];
+            for (const [depId, label] of edgeMap) {
+              if (label === "OF") {
+                ofOnlyDeps.push(depId);
+              }
+            }
+            if (ofOnlyDeps.length > 0) {
+              var newDeps = existing.dependsOn.slice();
+              for (const dep of ofOnlyDeps) {
+                if (newDeps.indexOf(dep) === -1) {
+                  newDeps.push(dep);
+                }
+              }
+              await lib.updateTask(mapping.dagnyProjectId, taskId, {
+                dependsOn: newDeps,
+              });
+              existing.dependsOn = newDeps;
+            }
+          }
+        }
+
         if (
           (target.type === "folder" || target.type === "everything") &&
           ofProjectChildren.size > 0

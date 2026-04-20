@@ -3,6 +3,73 @@
 // Built as an ES module (tsconfig.lib.json); module syntax is stripped
 // by build.mjs before injection into the OmniFocus plugin bundle.
 
+export function mergeLabels(a: EdgeLabel, b: EdgeLabel): EdgeLabel {
+  if (a === b) return a;
+  return "both";
+}
+
+export function unlabel(
+  labeled: LabeledEdges,
+): Map<string, Set<string>> {
+  const result = new Map<string, Set<string>>();
+  for (const [id, deps] of labeled) {
+    result.set(id, new Set(deps.keys()));
+  }
+  return result;
+}
+
+export function buildLabeledDag(
+  tasks: DagnyTaskWithId[],
+  ofEdges?: Map<string, Set<string>>,
+  excludeIds?: Set<string>,
+): {
+  dependsOn: LabeledEdges;
+  dependedOnBy: Map<string, Set<string>>;
+  taskIds: Set<string>;
+} {
+  const dependsOn: LabeledEdges = new Map();
+  const dependedOnBy = new Map<string, Set<string>>();
+  const taskIds = new Set<string>();
+
+  for (const t of tasks) {
+    if (excludeIds && excludeIds.has(t.taskId)) continue;
+    taskIds.add(t.taskId);
+    dependsOn.set(t.taskId, new Map<string, EdgeLabel>());
+    dependedOnBy.set(t.taskId, new Set<string>());
+  }
+
+  // Add Dagny edges, labeled "dagny"
+  for (const t of tasks) {
+    if (!taskIds.has(t.taskId)) continue;
+    for (const depId of t.dependsOn) {
+      if (!taskIds.has(depId)) continue;
+      dependsOn.get(t.taskId)!.set(depId, "dagny");
+      dependedOnBy.get(depId)!.add(t.taskId);
+    }
+  }
+
+  // Merge OF edges: coinciding → "both", new → "OF"
+  if (ofEdges) {
+    for (const [id, deps] of ofEdges) {
+      if (!taskIds.has(id)) continue;
+      const edgeMap = dependsOn.get(id);
+      if (!edgeMap) continue;
+      for (const depId of deps) {
+        if (!taskIds.has(depId)) continue;
+        const existing = edgeMap.get(depId);
+        if (existing) {
+          edgeMap.set(depId, mergeLabels(existing, "OF"));
+        } else {
+          edgeMap.set(depId, "OF");
+        }
+        dependedOnBy.get(depId)!.add(id);
+      }
+    }
+  }
+
+  return { dependsOn, dependedOnBy, taskIds };
+}
+
 export function buildDag(
   tasks: DagnyTaskWithId[],
   excludeIds?: Set<string>,
@@ -34,22 +101,35 @@ export function buildDag(
   return { dependsOn, dependedOnBy, taskIds };
 }
 
-export function transitiveReduction(
-  dependsOn: Map<string, Set<string>>,
+export function transitiveReductionLabeled(
+  dependsOn: LabeledEdges,
   taskIds: Set<string>,
-): Map<string, Set<string>> {
-  const reduced = new Map<string, Set<string>>();
+): LabeledEdges {
+  const reduced: LabeledEdges = new Map();
   for (const [id, deps] of dependsOn) {
-    reduced.set(id, new Set(deps));
+    reduced.set(id, new Map(deps));
   }
 
+  // Pre-compute unlabeled view for reachability checks
+  var unlabeled = unlabel(reduced);
+
   for (const node of taskIds) {
-    const directDeps = Array.from(reduced.get(node) || []);
+    const nodeDeps = reduced.get(node);
+    if (!nodeDeps) continue;
+    const directDeps = Array.from(nodeDeps.keys());
     for (const dep of directDeps) {
+      if (!nodeDeps.has(dep)) continue;
       for (const otherDep of directDeps) {
         if (otherDep === dep) continue;
-        if (isReachable(otherDep, dep, reduced)) {
-          reduced.get(node)!.delete(dep);
+        if (!nodeDeps.has(otherDep)) continue;
+        if (isReachable(otherDep, dep, unlabeled)) {
+          // Propagate removed edge's label to the kept edge
+          const removedLabel = nodeDeps.get(dep)!;
+          const keptLabel = nodeDeps.get(otherDep)!;
+          nodeDeps.set(otherDep, mergeLabels(removedLabel, keptLabel));
+          nodeDeps.delete(dep);
+          // Update unlabeled view
+          unlabeled.get(node)!.delete(dep);
           break;
         }
       }
@@ -57,6 +137,23 @@ export function transitiveReduction(
   }
 
   return reduced;
+}
+
+export function transitiveReduction(
+  dependsOn: Map<string, Set<string>>,
+  taskIds: Set<string>,
+): Map<string, Set<string>> {
+  // Wrap in labels, reduce, then unwrap
+  const labeled: LabeledEdges = new Map();
+  for (const [id, deps] of dependsOn) {
+    const m = new Map<string, EdgeLabel>();
+    for (const dep of deps) {
+      m.set(dep, "dagny");
+    }
+    labeled.set(id, m);
+  }
+  const reduced = transitiveReductionLabeled(labeled, taskIds);
+  return unlabel(reduced);
 }
 
 export function isReachable(
@@ -265,15 +362,48 @@ export function findSharedSubDeps(
   return shared;
 }
 
+export function labelScore(label: EdgeLabel): number {
+  if (label === "both") return 2;
+  if (label === "dagny") return 1;
+  return 0; // "OF"
+}
+
 export function dagToTree(
   tasks: DagnyTaskWithId[],
   mode: DependencyMode,
   containerSequential?: boolean,
   excludeIds?: Set<string>,
   noFlattenIds?: Set<string>,
+  edgeLabels?: LabeledEdges,
 ): OFTreeNode[] {
   const dag = buildDag(tasks, excludeIds);
-  const reduced = transitiveReduction(dag.dependsOn, dag.taskIds);
+
+  // When labeled edges are provided, do a labeled transitive reduction
+  // to propagate labels through removed edges, then extract connectivity.
+  var reducedLabeled: LabeledEdges | null = null;
+  var reduced: Map<string, Set<string>>;
+  if (edgeLabels) {
+    // Filter edgeLabels to only include tasks in the dag
+    const filtered: LabeledEdges = new Map();
+    for (const id of dag.taskIds) {
+      const edges = edgeLabels.get(id);
+      if (edges) {
+        const m = new Map<string, EdgeLabel>();
+        for (const [depId, label] of edges) {
+          if (dag.taskIds.has(depId)) {
+            m.set(depId, label);
+          }
+        }
+        filtered.set(id, m);
+      } else {
+        filtered.set(id, new Map());
+      }
+    }
+    reducedLabeled = transitiveReductionLabeled(filtered, dag.taskIds);
+    reduced = unlabel(reducedLabeled);
+  } else {
+    reduced = transitiveReduction(dag.dependsOn, dag.taskIds);
+  }
 
   const reducedBy = new Map<string, Set<string>>();
   for (const id of dag.taskIds) {
@@ -312,6 +442,27 @@ export function dagToTree(
     const deps = Array.from(reduced.get(taskId) || []).filter(function (d) {
       return !placed.has(d);
     });
+
+    // In optimistic mode with labels, sort deps so better-labeled edges
+    // are processed first (claiming shared sub-deps).
+    // Order: priority (highest first), then label (both > dagny > OF).
+    if (reducedLabeled && mode === "optimistic" && deps.length > 1) {
+      const edgesForTask = reducedLabeled.get(taskId);
+      deps.sort(function (a, b) {
+        const pa = subtreePriority(
+          { dagnyTaskId: a, sequential: false, children: [] },
+          taskMap,
+        );
+        const pb = subtreePriority(
+          { dagnyTaskId: b, sequential: false, children: [] },
+          taskMap,
+        );
+        if (pb !== pa) return pb - pa;
+        const la = edgesForTask ? edgesForTask.get(a) : undefined;
+        const lb = edgesForTask ? edgesForTask.get(b) : undefined;
+        return labelScore(lb || "OF") - labelScore(la || "OF");
+      });
+    }
 
     if (deps.length === 0) {
       return {

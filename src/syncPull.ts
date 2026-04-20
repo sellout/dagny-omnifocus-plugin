@@ -3,6 +3,69 @@
   // are defined in dagGraph.ts and available in the global scope when
   // compiled with module: "none".
 
+  // ---- Extract OF-implied edges ----
+
+  // For each linked OF task, infer dependency edges from its position
+  // in the OF hierarchy.  Returns edges keyed by Dagny task IDs.
+  function extractOFEdges(
+    existingIndex: Map<string, Task>,
+  ): Map<string, Set<string>> {
+    const ofEdges = new Map<string, Set<string>>();
+
+    // Reverse map: OF primaryKey → Dagny taskId (only for linked tasks)
+    const ofToDagnyId = new Map<string, string>();
+    for (const [dagnyId, ofTask] of existingIndex) {
+      ofToDagnyId.set(ofTask.id.primaryKey, dagnyId);
+    }
+
+    function addEdge(fromDagnyId: string, toDagnyId: string): void {
+      var deps = ofEdges.get(fromDagnyId);
+      if (!deps) {
+        deps = new Set<string>();
+        ofEdges.set(fromDagnyId, deps);
+      }
+      deps.add(toDagnyId);
+    }
+
+    for (const [dagnyId, ofTask] of existingIndex) {
+      // 1) Group → depends on children
+      if (ofTask.hasChildren) {
+        var children = ofTask.children;
+        if (ofTask.sequential && children.length > 0) {
+          var lastDagnyId = ofToDagnyId.get(
+            children[children.length - 1].id.primaryKey,
+          );
+          if (lastDagnyId) addEdge(dagnyId, lastDagnyId);
+        } else {
+          for (var c = 0; c < children.length; c++) {
+            var childDagnyId = ofToDagnyId.get(children[c].id.primaryKey);
+            if (childDagnyId) addEdge(dagnyId, childDagnyId);
+          }
+        }
+      }
+
+      // 2) Sequential sibling → depends on previous sibling
+      var parent = ofTask.parent;
+      if (parent) {
+        var siblings = parent.children;
+        var isSequential = parent.sequential;
+        if (isSequential) {
+          for (var i = 1; i < siblings.length; i++) {
+            if (siblings[i].id.primaryKey === ofTask.id.primaryKey) {
+              var prevDagnyId = ofToDagnyId.get(
+                siblings[i - 1].id.primaryKey,
+              );
+              if (prevDagnyId) addEdge(dagnyId, prevDagnyId);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    return ofEdges;
+  }
+
   // ---- Tree-to-OF reconciliation ----
 
   function applyTree(
@@ -333,12 +396,21 @@
           target.type === "project" && target.container
             ? target.container.sequential
             : false;
+
+        // Build combined labeled graph: Dagny edges + OF-implied edges.
+        const ofEdges = extractOFEdges(existingIndex);
+        const labeledDag = buildLabeledDag(
+          activeTasks,
+          ofEdges,
+          containerIds,
+        );
         const tree = dagToTree(
           activeTasks,
           mode,
           containerSequential,
           containerIds,
           noFlattenIds,
+          labeledDag.dependsOn,
         );
 
         if (target.type === "project") {

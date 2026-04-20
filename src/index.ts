@@ -1,8 +1,13 @@
 // Library entry point for the graph conversion library.
 
 export {
+  mergeLabels,
+  unlabel,
+  buildLabeledDag,
   buildDag,
+  transitiveReductionLabeled,
   transitiveReduction,
+  labelScore,
   isReachable,
   findChain,
   areIndependent,

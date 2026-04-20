@@ -15,26 +15,27 @@ mkdirSync(out, { recursive: true });
 for (const f of [
   "dagnyLib.js",
   "configure.js",
-  "syncPush.js",
   "removeMapping.js",
 ]) {
   copyFileSync(join(build, f), join(out, f));
 }
 
-// syncPull.js = dagGraph.js + syncPull.js (concatenated)
 // dagGraph.js is compiled as an ES module (dist/); strip module syntax
-// so it works inside syncPull's IIFE in the OmniFocus plugin.
+// so it works inside each plugin file's IIFE in the OmniFocus plugin.
 const dagGraph = readFileSync(join(dist, "dagGraph.js"), "utf-8")
   .replace(/^"use strict";\s*/m, "")
   .replace(/^export /gm, "")
   .replace(/^import .*;\s*$/gm, "");
-const syncPull = readFileSync(join(build, "syncPull.js"), "utf-8");
 
-// Insert dagGraph functions right after the IIFE opening
-const assembled = syncPull.replace(
-  /^("use strict";\s*\(\(\)\s*=>\s*\{)/,
-  "$1\n" + dagGraph,
-);
-writeFileSync(join(out, "syncPull.js"), assembled);
+// Inject dagGraph functions into both syncPull.js and syncPush.js,
+// since both now use graph functions (buildLabeledDag, etc.).
+for (const f of ["syncPull.js", "syncPush.js"]) {
+  const src = readFileSync(join(build, f), "utf-8");
+  const assembled = src.replace(
+    /^("use strict";\s*\(\(\)\s*=>\s*\{)/,
+    "$1\n" + dagGraph,
+  );
+  writeFileSync(join(out, f), assembled);
+}
 
 console.log("Plugin assembled in " + out);

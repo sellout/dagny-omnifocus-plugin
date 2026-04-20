@@ -28,3 +28,6 @@ interface OFTreeNode {
 type DependencyMode = "conservative" | "optimistic";
 
 type TaskCategory = "mine" | "blocker" | "blocked";
+
+type EdgeLabel = "dagny" | "OF" | "both";
+type LabeledEdges = Map<string, Map<string, EdgeLabel>>;

@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import * as fc from "fast-check";
 import {
+  mergeLabels,
+  unlabel,
+  buildLabeledDag,
   buildDag,
+  transitiveReductionLabeled,
   transitiveReduction,
   isReachable,
   findChain,
@@ -50,6 +54,107 @@ function collectAllIds(nodes: any[]): Set<string> {
   walk(nodes);
   return ids;
 }
+
+// ---- mergeLabels ----
+
+describe("mergeLabels", () => {
+  it("returns same label for identical inputs", () => {
+    expect(mergeLabels("dagny", "dagny")).toBe("dagny");
+    expect(mergeLabels("OF", "OF")).toBe("OF");
+    expect(mergeLabels("both", "both")).toBe("both");
+  });
+
+  it("returns 'both' for different labels", () => {
+    expect(mergeLabels("dagny", "OF")).toBe("both");
+    expect(mergeLabels("OF", "dagny")).toBe("both");
+  });
+
+  it("returns 'both' when either is 'both'", () => {
+    expect(mergeLabels("both", "dagny")).toBe("both");
+    expect(mergeLabels("both", "OF")).toBe("both");
+    expect(mergeLabels("dagny", "both")).toBe("both");
+    expect(mergeLabels("OF", "both")).toBe("both");
+  });
+});
+
+// ---- unlabel ----
+
+describe("unlabel", () => {
+  it("strips labels from labeled edges", () => {
+    const labeled: LabeledEdges = new Map([
+      ["A", new Map([["B", "dagny" as EdgeLabel], ["C", "OF" as EdgeLabel]])],
+      ["B", new Map<string, EdgeLabel>()],
+      ["C", new Map<string, EdgeLabel>()],
+    ]);
+    const result = unlabel(labeled);
+    expect(result.get("A")).toEqual(new Set(["B", "C"]));
+    expect(result.get("B")).toEqual(new Set());
+    expect(result.get("C")).toEqual(new Set());
+  });
+
+  it("returns empty map for empty input", () => {
+    expect(unlabel(new Map())).toEqual(new Map());
+  });
+});
+
+// ---- buildLabeledDag ----
+
+describe("buildLabeledDag", () => {
+  it("labels all Dagny edges as 'dagny' when no OF edges", () => {
+    const tasks = [makeTask("A"), makeTask("B", ["A"])];
+    const dag = buildLabeledDag(tasks);
+    expect(dag.dependsOn.get("B")!.get("A")).toBe("dagny");
+    expect(dag.dependsOn.get("A")!.size).toBe(0);
+  });
+
+  it("labels OF-only edges as 'OF'", () => {
+    const tasks = [makeTask("A"), makeTask("B")];
+    const ofEdges = new Map([["B", new Set(["A"])]]);
+    const dag = buildLabeledDag(tasks, ofEdges);
+    expect(dag.dependsOn.get("B")!.get("A")).toBe("OF");
+  });
+
+  it("labels coinciding edges as 'both'", () => {
+    const tasks = [makeTask("A"), makeTask("B", ["A"])];
+    const ofEdges = new Map([["B", new Set(["A"])]]);
+    const dag = buildLabeledDag(tasks, ofEdges);
+    expect(dag.dependsOn.get("B")!.get("A")).toBe("both");
+  });
+
+  it("handles mixed: some dagny-only, some OF-only, some both", () => {
+    const tasks = [
+      makeTask("A"),
+      makeTask("B"),
+      makeTask("C"),
+      makeTask("D", ["A", "B"]),
+    ];
+    const ofEdges = new Map([["D", new Set(["B", "C"])]]);
+    const dag = buildLabeledDag(tasks, ofEdges);
+    expect(dag.dependsOn.get("D")!.get("A")).toBe("dagny"); // dagny only
+    expect(dag.dependsOn.get("D")!.get("B")).toBe("both"); // coinciding
+    expect(dag.dependsOn.get("D")!.get("C")).toBe("OF"); // OF only
+  });
+
+  it("excludes tasks by excludeIds", () => {
+    const tasks = [makeTask("A"), makeTask("B", ["A"]), makeTask("P")];
+    const dag = buildLabeledDag(tasks, undefined, new Set(["P"]));
+    expect(dag.taskIds).toEqual(new Set(["A", "B"]));
+  });
+
+  it("ignores OF edges to/from excluded or missing tasks", () => {
+    const tasks = [makeTask("A"), makeTask("B")];
+    const ofEdges = new Map([["B", new Set(["MISSING"])]]);
+    const dag = buildLabeledDag(tasks, ofEdges);
+    expect(dag.dependsOn.get("B")!.size).toBe(0);
+  });
+
+  it("builds correct dependedOnBy", () => {
+    const tasks = [makeTask("A"), makeTask("B", ["A"])];
+    const ofEdges = new Map([["B", new Set(["A"])]]);
+    const dag = buildLabeledDag(tasks, ofEdges);
+    expect(dag.dependedOnBy.get("A")).toEqual(new Set(["B"]));
+  });
+});
 
 // ---- buildDag ----
 
@@ -131,6 +236,88 @@ describe("transitiveReduction", () => {
     expect(reduced.get("X")).toEqual(new Set(["A", "B"]));
     expect(reduced.get("A")).toEqual(new Set(["D"]));
     expect(reduced.get("B")).toEqual(new Set(["D"]));
+  });
+});
+
+// ---- transitiveReductionLabeled ----
+
+function makeLabeledDeps(
+  ...pairs: [string, [string, EdgeLabel][]][]
+): LabeledEdges {
+  const m: LabeledEdges = new Map();
+  for (const [id, deps] of pairs) {
+    m.set(id, new Map(deps));
+  }
+  return m;
+}
+
+describe("transitiveReductionLabeled", () => {
+  it("removes transitive edges and propagates labels", () => {
+    // A depends on B ("OF") and C ("dagny"), B depends on C
+    // A→C is transitive through B → remove A→C, merge its label into A→B
+    const deps = makeLabeledDeps(
+      ["A", [["B", "OF"], ["C", "dagny"]]],
+      ["B", [["C", "dagny"]]],
+      ["C", []],
+    );
+    const reduced = transitiveReductionLabeled(deps, new Set(["A", "B", "C"]));
+    expect(reduced.get("A")!.has("C")).toBe(false);
+    expect(reduced.get("A")!.get("B")).toBe("both"); // OF + dagny = both
+    expect(reduced.get("B")!.get("C")).toBe("dagny");
+  });
+
+  it("preserves labels on non-transitive edges", () => {
+    // A→B ("dagny"), A→C ("OF"), B and C independent
+    const deps = makeLabeledDeps(
+      ["A", [["B", "dagny"], ["C", "OF"]]],
+      ["B", []],
+      ["C", []],
+    );
+    const reduced = transitiveReductionLabeled(deps, new Set(["A", "B", "C"]));
+    expect(reduced.get("A")!.get("B")).toBe("dagny");
+    expect(reduced.get("A")!.get("C")).toBe("OF");
+  });
+
+  it("merges 'both' label correctly on transitive removal", () => {
+    // A→B ("both"), A→C ("OF"), B→C
+    // A→C transitive → merge "OF" into "both" → still "both"
+    const deps = makeLabeledDeps(
+      ["A", [["B", "both"], ["C", "OF"]]],
+      ["B", [["C", "dagny"]]],
+      ["C", []],
+    );
+    const reduced = transitiveReductionLabeled(deps, new Set(["A", "B", "C"]));
+    expect(reduced.get("A")!.has("C")).toBe(false);
+    expect(reduced.get("A")!.get("B")).toBe("both");
+  });
+
+  it("handles diamond with labels", () => {
+    // X→A ("dagny"), X→B ("OF"), A→D ("dagny"), B→D ("OF")
+    // No transitive edges in diamond — all preserved
+    const deps = makeLabeledDeps(
+      ["X", [["A", "dagny"], ["B", "OF"]]],
+      ["A", [["D", "dagny"]]],
+      ["B", [["D", "OF"]]],
+      ["D", []],
+    );
+    const reduced = transitiveReductionLabeled(
+      deps,
+      new Set(["X", "A", "B", "D"]),
+    );
+    expect(reduced.get("X")!.get("A")).toBe("dagny");
+    expect(reduced.get("X")!.get("B")).toBe("OF");
+  });
+
+  it("propagates same-source labels", () => {
+    // A→B ("dagny"), A→C ("dagny"), B→C → A→C removed, A→B stays "dagny"
+    const deps = makeLabeledDeps(
+      ["A", [["B", "dagny"], ["C", "dagny"]]],
+      ["B", [["C", "dagny"]]],
+      ["C", []],
+    );
+    const reduced = transitiveReductionLabeled(deps, new Set(["A", "B", "C"]));
+    expect(reduced.get("A")!.has("C")).toBe(false);
+    expect(reduced.get("A")!.get("B")).toBe("dagny");
   });
 });
 
@@ -362,6 +549,99 @@ describe("dagToTree", () => {
     expect(tree[0].dagnyTaskId).toBe("X");
     // A and B are independent → parallel
     expect(tree[0].sequential).toBe(false);
+  });
+
+  it("optimistic mode with labels: prefers 'dagny' over 'OF' edges", () => {
+    // X depends on A ("dagny") and B ("OF"), both equal priority.
+    // Both A and B depend on D (shared sub-dep).
+    // containerSequential=false so hoisting doesn't apply.
+    // In optimistic mode, A should be processed first (dagny > OF),
+    // so A claims D as its child.
+    const tasks = [
+      makeTask("D"),
+      makeTask("A", ["D"]),
+      makeTask("B", ["D"]),
+      makeTask("X", ["A", "B"]),
+    ];
+    const edgeLabels: LabeledEdges = new Map([
+      ["X", new Map([["A", "dagny" as EdgeLabel], ["B", "OF" as EdgeLabel]])],
+      ["A", new Map([["D", "dagny" as EdgeLabel]])],
+      ["B", new Map([["D", "OF" as EdgeLabel]])],
+      ["D", new Map<string, EdgeLabel>()],
+    ]);
+    const tree = dagToTree(
+      tasks,
+      "optimistic",
+      false,
+      undefined,
+      undefined,
+      edgeLabels,
+    );
+    // A (dagny-labeled) should have D as child; B should be a leaf
+    function findNode(nodes: any[], id: string): any {
+      for (const n of nodes) {
+        if (n.dagnyTaskId === id) return n;
+        const found = findNode(n.children, id);
+        if (found) return found;
+      }
+      return null;
+    }
+    const nodeA = findNode(tree, "A");
+    const nodeB = findNode(tree, "B");
+    expect(nodeA).not.toBeNull();
+    expect(nodeB).not.toBeNull();
+    // D should be under A (dagny-preferred), not B (OF)
+    expect(nodeA.children.length).toBe(1);
+    expect(nodeA.children[0].dagnyTaskId).toBe("D");
+    expect(nodeB.children.length).toBe(0);
+  });
+
+  it("optimistic mode with labels: prefers 'both' over 'dagny'", () => {
+    const tasks = [
+      makeTask("D"),
+      makeTask("A", ["D"]),
+      makeTask("B", ["D"]),
+      makeTask("X", ["A", "B"]),
+    ];
+    const edgeLabels: LabeledEdges = new Map([
+      ["X", new Map([["A", "dagny" as EdgeLabel], ["B", "both" as EdgeLabel]])],
+      ["A", new Map([["D", "dagny" as EdgeLabel]])],
+      ["B", new Map([["D", "both" as EdgeLabel]])],
+      ["D", new Map<string, EdgeLabel>()],
+    ]);
+    const tree = dagToTree(
+      tasks,
+      "optimistic",
+      false,
+      undefined,
+      undefined,
+      edgeLabels,
+    );
+    function findNode(nodes: any[], id: string): any {
+      for (const n of nodes) {
+        if (n.dagnyTaskId === id) return n;
+        const found = findNode(n.children, id);
+        if (found) return found;
+      }
+      return null;
+    }
+    const nodeB = findNode(tree, "B");
+    // B (both-labeled) should claim D
+    expect(nodeB.children.length).toBe(1);
+    expect(nodeB.children[0].dagnyTaskId).toBe("D");
+  });
+
+  it("works unchanged when no edgeLabels provided", () => {
+    // Same as existing diamond test — should behave identically
+    const tasks = [
+      makeTask("D"),
+      makeTask("A", ["D"]),
+      makeTask("B", ["D"]),
+      makeTask("X", ["A", "B"]),
+    ];
+    const tree = dagToTree(tasks, "optimistic");
+    const allIds = collectAllIds(tree);
+    expect(allIds).toEqual(new Set(["X", "A", "B", "D"]));
   });
 });
 
