@@ -31,5 +31,6 @@
   services.nix-ci.enable = lib.mkForce null;
 
   ## publishing
+  services.github.settings.repository.private = false;
   services.github.settings.repository.topics = [];
 }

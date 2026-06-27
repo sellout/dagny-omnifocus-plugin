@@ -82,7 +82,13 @@ describe("mergeLabels", () => {
 describe("unlabel", () => {
   it("strips labels from labeled edges", () => {
     const labeled: LabeledEdges = new Map([
-      ["A", new Map([["B", "dagny" as EdgeLabel], ["C", "OF" as EdgeLabel]])],
+      [
+        "A",
+        new Map([
+          ["B", "dagny" as EdgeLabel],
+          ["C", "OF" as EdgeLabel],
+        ]),
+      ],
       ["B", new Map<string, EdgeLabel>()],
       ["C", new Map<string, EdgeLabel>()],
     ]);
@@ -256,7 +262,13 @@ describe("transitiveReductionLabeled", () => {
     // A depends on B ("OF") and C ("dagny"), B depends on C
     // A→C is transitive through B → remove A→C, merge its label into A→B
     const deps = makeLabeledDeps(
-      ["A", [["B", "OF"], ["C", "dagny"]]],
+      [
+        "A",
+        [
+          ["B", "OF"],
+          ["C", "dagny"],
+        ],
+      ],
       ["B", [["C", "dagny"]]],
       ["C", []],
     );
@@ -269,7 +281,13 @@ describe("transitiveReductionLabeled", () => {
   it("preserves labels on non-transitive edges", () => {
     // A→B ("dagny"), A→C ("OF"), B and C independent
     const deps = makeLabeledDeps(
-      ["A", [["B", "dagny"], ["C", "OF"]]],
+      [
+        "A",
+        [
+          ["B", "dagny"],
+          ["C", "OF"],
+        ],
+      ],
       ["B", []],
       ["C", []],
     );
@@ -282,7 +300,13 @@ describe("transitiveReductionLabeled", () => {
     // A→B ("both"), A→C ("OF"), B→C
     // A→C transitive → merge "OF" into "both" → still "both"
     const deps = makeLabeledDeps(
-      ["A", [["B", "both"], ["C", "OF"]]],
+      [
+        "A",
+        [
+          ["B", "both"],
+          ["C", "OF"],
+        ],
+      ],
       ["B", [["C", "dagny"]]],
       ["C", []],
     );
@@ -295,7 +319,13 @@ describe("transitiveReductionLabeled", () => {
     // X→A ("dagny"), X→B ("OF"), A→D ("dagny"), B→D ("OF")
     // No transitive edges in diamond — all preserved
     const deps = makeLabeledDeps(
-      ["X", [["A", "dagny"], ["B", "OF"]]],
+      [
+        "X",
+        [
+          ["A", "dagny"],
+          ["B", "OF"],
+        ],
+      ],
       ["A", [["D", "dagny"]]],
       ["B", [["D", "OF"]]],
       ["D", []],
@@ -311,7 +341,13 @@ describe("transitiveReductionLabeled", () => {
   it("propagates same-source labels", () => {
     // A→B ("dagny"), A→C ("dagny"), B→C → A→C removed, A→B stays "dagny"
     const deps = makeLabeledDeps(
-      ["A", [["B", "dagny"], ["C", "dagny"]]],
+      [
+        "A",
+        [
+          ["B", "dagny"],
+          ["C", "dagny"],
+        ],
+      ],
       ["B", [["C", "dagny"]]],
       ["C", []],
     );
@@ -564,7 +600,13 @@ describe("dagToTree", () => {
       makeTask("X", ["A", "B"]),
     ];
     const edgeLabels: LabeledEdges = new Map([
-      ["X", new Map([["A", "dagny" as EdgeLabel], ["B", "OF" as EdgeLabel]])],
+      [
+        "X",
+        new Map([
+          ["A", "dagny" as EdgeLabel],
+          ["B", "OF" as EdgeLabel],
+        ]),
+      ],
       ["A", new Map([["D", "dagny" as EdgeLabel]])],
       ["B", new Map([["D", "OF" as EdgeLabel]])],
       ["D", new Map<string, EdgeLabel>()],
@@ -604,7 +646,13 @@ describe("dagToTree", () => {
       makeTask("X", ["A", "B"]),
     ];
     const edgeLabels: LabeledEdges = new Map([
-      ["X", new Map([["A", "dagny" as EdgeLabel], ["B", "both" as EdgeLabel]])],
+      [
+        "X",
+        new Map([
+          ["A", "dagny" as EdgeLabel],
+          ["B", "both" as EdgeLabel],
+        ]),
+      ],
       ["A", new Map([["D", "dagny" as EdgeLabel]])],
       ["B", new Map([["D", "both" as EdgeLabel]])],
       ["D", new Map<string, EdgeLabel>()],

@@ -8,9 +8,7 @@ export function mergeLabels(a: EdgeLabel, b: EdgeLabel): EdgeLabel {
   return "both";
 }
 
-export function unlabel(
-  labeled: LabeledEdges,
-): Map<string, Set<string>> {
+export function unlabel(labeled: LabeledEdges): Map<string, Set<string>> {
   const result = new Map<string, Set<string>>();
   for (const [id, deps] of labeled) {
     result.set(id, new Set(deps.keys()));

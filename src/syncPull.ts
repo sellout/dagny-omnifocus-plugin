@@ -52,9 +52,7 @@
         if (isSequential) {
           for (var i = 1; i < siblings.length; i++) {
             if (siblings[i].id.primaryKey === ofTask.id.primaryKey) {
-              var prevDagnyId = ofToDagnyId.get(
-                siblings[i - 1].id.primaryKey,
-              );
+              var prevDagnyId = ofToDagnyId.get(siblings[i - 1].id.primaryKey);
               if (prevDagnyId) addEdge(dagnyId, prevDagnyId);
               break;
             }
@@ -415,11 +413,7 @@
 
         // Build combined labeled graph: Dagny edges + OF-implied edges.
         const ofEdges = extractOFEdges(existingIndex);
-        const labeledDag = buildLabeledDag(
-          activeTasks,
-          ofEdges,
-          containerIds,
-        );
+        const labeledDag = buildLabeledDag(activeTasks, ofEdges, containerIds);
         const tree = dagToTree(
           activeTasks,
           mode,
@@ -621,10 +615,7 @@
 
               if (root.children.length > 0) {
                 existingTask.sequential = root.sequential;
-                var flatChildren = flattenTree(
-                  root.children,
-                  root.sequential,
-                );
+                var flatChildren = flattenTree(root.children, root.sequential);
                 applyTree(
                   flatChildren,
                   existingTask.ending,

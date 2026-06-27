@@ -357,9 +357,8 @@
       // ofTask.note includes when serializing rich text hyperlinks.
       const currentNote = noteText.string || "";
       const stripped = lib.stripDagnyLinkLine(currentNote);
-      var fullNote = stripped.length > 0
-        ? stripped + "\n\n" + linkLine
-        : linkLine;
+      var fullNote =
+        stripped.length > 0 ? stripped + "\n\n" + linkLine : linkLine;
       noteText.string = fullNote;
 
       // Find the link line at the end of the note.
@@ -396,9 +395,8 @@
       // noteText not available — fall back to plain-text note.
       const currentNote = ofTask.note || "";
       const stripped = lib.stripDagnyLinkLine(currentNote);
-      ofTask.note = stripped.length > 0
-        ? stripped + "\n\n" + linkLine
-        : linkLine;
+      ofTask.note =
+        stripped.length > 0 ? stripped + "\n\n" + linkLine : linkLine;
     }
   };
 

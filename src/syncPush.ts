@@ -382,9 +382,7 @@
               var siblings = parent.children;
               if (parent.sequential) {
                 for (var si = 1; si < siblings.length; si++) {
-                  if (
-                    siblings[si].id.primaryKey === foundTask.id.primaryKey
-                  ) {
+                  if (siblings[si].id.primaryKey === foundTask.id.primaryKey) {
                     var prevId = ofToDagnyId.get(
                       siblings[si - 1].id.primaryKey,
                     );
@@ -401,10 +399,7 @@
           }
 
           // Build labeled graph and push OF-only edges for existing tasks.
-          const labeledDag = buildLabeledDag(
-            dagnyTasks,
-            ofEdges,
-          );
+          const labeledDag = buildLabeledDag(dagnyTasks, ofEdges);
           for (const [taskId, edgeMap] of labeledDag.dependsOn) {
             var existing = dagnyIndex.get(taskId);
             if (!existing) continue;

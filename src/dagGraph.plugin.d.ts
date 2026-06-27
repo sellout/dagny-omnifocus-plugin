@@ -3,9 +3,7 @@
 
 declare function mergeLabels(a: EdgeLabel, b: EdgeLabel): EdgeLabel;
 
-declare function unlabel(
-  labeled: LabeledEdges,
-): Map<string, Set<string>>;
+declare function unlabel(labeled: LabeledEdges): Map<string, Set<string>>;
 
 declare function buildLabeledDag(
   tasks: DagnyTaskWithId[],
